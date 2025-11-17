@@ -9,6 +9,9 @@ const Feedback = () => {
   const [success, setSuccess] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [ratingFilter, setRatingFilter] = useState('all');
+  const [fetchFilter, setFetchFilter] = useState('all'); // all | customer | order
+  const [filterValue, setFilterValue] = useState('');
+  const [isApplyingFilter, setIsApplyingFilter] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [selectedFeedback, setSelectedFeedback] = useState(null);
   const [showResponseModal, setShowResponseModal] = useState(false);
@@ -18,15 +21,45 @@ const Feedback = () => {
     loadFeedback();
   }, []);
 
-  const loadFeedback = async () => {
+  const sanitizeFilterValue = (mode, value) => {
+    if (!value && value !== 0) return '';
+    const trimmed = value.toString().trim();
+    if (!trimmed) return '';
+
+    const withoutHash = trimmed.replace(/^#/, '');
+
+    if (mode === 'customer') {
+      const uuidMatch = withoutHash.match(/[0-9a-fA-F-]{8,}/);
+      if (uuidMatch) return uuidMatch[0];
+      return withoutHash.replace(/^customer\s+/i, '');
+    }
+
+    if (mode === 'order') {
+      const numberMatch = withoutHash.match(/\d+/);
+      if (numberMatch) return numberMatch[0];
+      return withoutHash.replace(/^order\s*/i, '');
+    }
+
+    return withoutHash;
+  };
+
+  const loadFeedback = async (mode = fetchFilter, value = filterValue) => {
     try {
       setLoading(true);
-      const data = await feedbackAPI.getAll();
+      const normalizedValue = sanitizeFilterValue(mode, value);
+      let data;
+      if (mode === 'customer' && normalizedValue) {
+        data = await feedbackAPI.getByCustomer(normalizedValue);
+      } else if (mode === 'order' && normalizedValue) {
+        data = await feedbackAPI.getByOrder(normalizedValue);
+      } else {
+        data = await feedbackAPI.getAll();
+      }
       const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
       setFeedback(feedbackList);
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to fetch feedback');
     } finally {
       setLoading(false);
     }
@@ -42,6 +75,25 @@ const Feedback = () => {
     } catch (err) {
       setError(err.message || 'Failed to delete feedback');
     }
+  };
+
+  const handleApplyFilter = async () => {
+    const normalized = sanitizeFilterValue(fetchFilter, filterValue);
+    if (fetchFilter !== 'all' && !normalized) {
+      setError(`Please enter a ${fetchFilter === 'customer' ? 'customer' : 'order'} ID`);
+      return;
+    }
+    setError(null);
+    setIsApplyingFilter(true);
+    await loadFeedback(fetchFilter, sanitizeFilterValue(fetchFilter, filterValue));
+    setIsApplyingFilter(false);
+  };
+
+  const handleResetFilter = async () => {
+    setFetchFilter('all');
+    setFilterValue('');
+    setError(null);
+    await loadFeedback('all', '');
   };
 
   const handleSendResponse = async () => {
@@ -68,12 +120,26 @@ const Feedback = () => {
     setShowResponseModal(true);
   };
 
+  const normalizeComment = (item) => item.comment || item.feedback_message || item.message || '';
+  const normalizeCustomerName = (item) =>
+    item.customer_name ||
+    item.customer_full_name ||
+    item.customer_email ||
+    (item.customer_id ? `Customer ${item.customer_id}` : 'Customer');
+  const normalizeCreatedAt = (item) => item.created_at || item.createdAt || item.createdDate;
+  const normalizeId = (item) =>
+    item.id || item.feedback_id || item.feedbackId || `${item.customer_id ?? ''}-${item.order_no ?? ''}`;
+
   const filteredFeedback = feedback.filter((item) => {
+    const commentText = normalizeComment(item);
+    const customerName = normalizeCustomerName(item);
+    const customerEmail = item.customer_email || '';
+    const itemId = normalizeId(item);
     const matchesSearch =
-      item.comment?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.customer_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.id?.toString().includes(searchTerm);
+      commentText.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      itemId?.toString().includes(searchTerm);
 
     const matchesRating =
       ratingFilter === 'all' ||
@@ -120,53 +186,98 @@ const Feedback = () => {
       )}
 
       {/* Search and Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center space-x-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search feedback..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-4 md:space-y-0">
+          <div className="flex-1 relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search feedback..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Filter className="w-5 h-5 text-gray-400" />
+            <select
+              value={ratingFilter}
+              onChange={(e) => setRatingFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Ratings</option>
+              <option value="5">5 Stars</option>
+              <option value="4">4 Stars</option>
+              <option value="3">3 Stars</option>
+              <option value="2">2 Stars</option>
+              <option value="1">1 Star</option>
+            </select>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <Filter className="w-5 h-5 text-gray-400" />
-          <select
-            value={ratingFilter}
-            onChange={(e) => setRatingFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Ratings</option>
-            <option value="5">5 Stars</option>
-            <option value="4">4 Stars</option>
-            <option value="3">3 Stars</option>
-            <option value="2">2 Stars</option>
-            <option value="1">1 Star</option>
-          </select>
+
+        <div className="flex flex-col lg:flex-row lg:items-end lg:space-x-4 space-y-4 lg:space-y-0">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Fetch Feedback By</label>
+            <div className="flex flex-col md:flex-row md:items-center md:space-x-3 space-y-3 md:space-y-0">
+              <select
+                value={fetchFilter}
+                onChange={(e) => setFetchFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent md:w-48"
+              >
+                <option value="all">All Feedback</option>
+                <option value="customer">Customer ID</option>
+                <option value="order">Order ID</option>
+              </select>
+              {fetchFilter !== 'all' && (
+                <input
+                  type="text"
+                  value={filterValue}
+                  onChange={(e) => setFilterValue(e.target.value)}
+                  placeholder={`Enter ${fetchFilter} ID`}
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              )}
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleApplyFilter}
+              disabled={isApplyingFilter}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isApplyingFilter ? 'Applying...' : 'Apply'}
+            </button>
+            <button
+              onClick={handleResetFilter}
+              className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+            >
+              Reset
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Feedback List */}
       <div className="space-y-4">
         {filteredFeedback.length > 0 ? (
-          filteredFeedback.map((item) => (
-            <div
-              key={item.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition"
-            >
-              <div className="flex items-start justify-between">
+          filteredFeedback.map((item) => {
+            const itemId = normalizeId(item);
+            return (
+              <div
+                key={itemId}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition"
+              >
+                <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-3">
                     <MessageSquare className="w-6 h-6 text-blue-600" />
                     <div>
                       <p className="font-semibold text-gray-900">
-                        {item.customer_name || `Customer ${item.customer_id || item.user_id}`}
+                        {normalizeCustomerName(item)}
                       </p>
                       <p className="text-sm text-gray-500">
-                        {item.created_at
-                          ? new Date(item.created_at).toLocaleDateString('en-US', {
+                        {normalizeCreatedAt(item)
+                          ? new Date(normalizeCreatedAt(item)).toLocaleDateString('en-US', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric',
@@ -188,8 +299,8 @@ const Feedback = () => {
                       <span className="ml-2 text-sm text-gray-600">({item.rating}/5)</span>
                     </div>
                   )}
-                  {item.comment && (
-                    <p className="text-gray-700 mb-3">{item.comment}</p>
+                  {normalizeComment(item) && (
+                    <p className="text-gray-700 mb-3">{normalizeComment(item)}</p>
                   )}
                   {item.response && (
                     <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded mb-3">
@@ -209,16 +320,17 @@ const Feedback = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => setShowDeleteConfirm(item.id)}
+                    onClick={() => setShowDeleteConfirm(itemId)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                     title="Delete"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
             <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
