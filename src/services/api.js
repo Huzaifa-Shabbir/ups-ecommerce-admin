@@ -130,6 +130,32 @@ export const servicesAPI = {
   delete: (id) => apiRequest(`/services/${id}`, { method: 'DELETE' }),
 };
 
+// Slots API
+export const slotsAPI = {
+  getAll: async () => {
+    const data = await apiRequest('/slots');
+    return Array.isArray(data) ? data : (data.slots || data);
+  },
+  getById: async (id) => {
+    const data = await apiRequest(`/slots/${id}`);
+    return data.slot || data;
+  },
+  create: (slotData) =>
+    apiRequest('/slots', {
+      method: 'POST',
+      body: JSON.stringify(slotData),
+    }),
+  update: (id, slotData) =>
+    apiRequest(`/slots/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(slotData),
+    }),
+  delete: (id) =>
+    apiRequest(`/slots/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
 // Payments API
 export const paymentsAPI = {
   getAll: async () => {
