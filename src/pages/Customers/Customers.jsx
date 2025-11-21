@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { ordersAPI } from '../../services/api';
-import { Users, Search, Eye, Download, Calendar, Mail, Phone, ShoppingCart, DollarSign, X, AlertCircle } from 'lucide-react';
+import { ordersAPI, customersAPI } from '../../services/api';
+import { Users, Search, Eye, Download, Calendar, Mail, Phone, ShoppingCart, DollarSign, X, AlertCircle, Trash } from 'lucide-react';
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
+  const [customerFilter, setCustomerFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -12,45 +13,64 @@ const Customers = () => {
   const [customerOrders, setCustomerOrders] = useState([]);
 
   useEffect(() => {
-    loadCustomers();
+    loadCustomers(customerFilter);
   }, []);
 
-  const loadCustomers = async () => {
+  const loadCustomers = async (filter = 'all') => {
     try {
       setLoading(true);
-      const orders = await ordersAPI.getAll();
-      const ordersList = Array.isArray(orders) ? orders : (orders.orders || []);
-      
-      const customerMap = new Map();
-      
-      ordersList.forEach((order) => {
-        const customerId = order.customer_id || order.user_id;
-        if (customerId) {
-          if (!customerMap.has(customerId)) {
-            customerMap.set(customerId, {
-              id: customerId,
-              username: order.customer_name || `Customer ${customerId}`,
-              email: order.customer_email || 'N/A',
-              registrationDate: order.created_at || null,
-              totalOrders: 1,
-              totalSpent: parseFloat(order.total_amount || order.amount || 0),
-              lastOrderDate: order.created_at,
-            });
-          } else {
-            const customer = customerMap.get(customerId);
-            customer.totalOrders += 1;
-            customer.totalSpent += parseFloat(order.total_amount || order.amount || 0);
-            if (new Date(order.created_at) > new Date(customer.lastOrderDate)) {
-              customer.lastOrderDate = order.created_at;
-            }
-          }
-        }
+      setError(null);
+      let data = [];
+      if (filter === 'active') {
+        data = await customersAPI.getActive();
+      } else {
+        data = await customersAPI.getAll();
+      }
+      // Normalize customers array shape
+      const customersList = Array.isArray(data) ? data : (data.customers || []);
+
+      // Also fetch orders to compute per-customer totals (frontend-only aggregation)
+      let ordersList = [];
+      try {
+        const ordersData = await ordersAPI.getAll();
+        ordersList = Array.isArray(ordersData) ? ordersData : (ordersData.orders || []);
+      } catch (e) {
+        console.warn('Failed to fetch orders for customer totals:', e.message || e);
+        ordersList = [];
+      }
+
+      // Build totals map by customer id
+      const totalsMap = new Map();
+      ordersList.forEach((o) => {
+        const cid = o.customer_id || o.user_id || o.user_Id || o.customer_Id;
+        if (!cid) return;
+        const key = cid.toString();
+        const prev = totalsMap.get(key) || { totalOrders: 0, totalSpent: 0 };
+        prev.totalOrders += 1;
+        prev.totalSpent += parseFloat(o.total_amount || o.amount || 0) || 0;
+        totalsMap.set(key, prev);
       });
 
-      setCustomers(Array.from(customerMap.values()));
-      setError(null);
+      // Map to expected UI shape and apply totals from orders
+      const mapped = customersList.map((c) => {
+        const cid = (c.user_Id || c.id || c.user_id || '').toString();
+        const totals = totalsMap.get(cid) || { totalOrders: 0, totalSpent: 0 };
+        return {
+          id: c.user_Id || c.id || c.user_id,
+          username: c.username || c.name || c.full_name || c.userName || c.name,
+          email: c.email || c.customer_email || 'N/A',
+          registrationDate: c.created_at || c.registrationDate || null,
+          is_active: c.is_active === undefined ? true : !!c.is_active,
+          totalOrders: totals.totalOrders,
+          totalSpent: totals.totalSpent,
+          raw: c,
+        };
+      });
+
+      setCustomers(mapped);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to load customers');
+      setCustomers([]);
     } finally {
       setLoading(false);
     }
@@ -58,15 +78,60 @@ const Customers = () => {
 
   const loadCustomerDetails = async (customerId) => {
     try {
-      const orders = await ordersAPI.getAll();
-      const ordersList = Array.isArray(orders) ? orders : (orders.orders || []);
-      const customerOrdersList = ordersList.filter(
-        o => (o.customer_id || o.user_id) === customerId
-      );
-      setCustomerOrders(customerOrdersList);
+      setLoading(true);
+      // Fetch customer full record (active endpoint)
+      const cust = await customersAPI.getById(customerId);
+      const customer = {
+        id: cust.user_Id || cust.id || cust.user_id,
+        username: cust.username || cust.name || cust.full_name || cust.userName,
+        email: cust.email,
+        registrationDate: cust.created_at || null,
+        is_active: cust.is_active === undefined ? true : !!cust.is_active,
+        raw: cust,
+      };
+
+      // Fetch customer orders separately
+      let orders = [];
+      try {
+        orders = await ordersAPI.getCustomerOrders(customer.id);
+      } catch (e) {
+        console.warn('Failed to fetch customer orders:', e.message || e);
+        orders = [];
+      }
+
+      setSelectedCustomer(customer);
+  const ordersList = Array.isArray(orders) ? orders : (orders.orders || []);
+  // Compute totals for selected customer
+  const totalOrders = ordersList.length;
+  const totalSpent = ordersList.reduce((sum, o) => sum + (parseFloat(o.total_amount || o.amount || 0) || 0), 0);
+
+  const customerWithTotals = { ...customer, totalOrders, totalSpent };
+
+  setSelectedCustomer(customerWithTotals);
+  setCustomerOrders(ordersList);
       setShowDetails(true);
+      setError(null);
     } catch (err) {
-      setError('Failed to load customer details: ' + err.message);
+      setError('Failed to load customer details: ' + (err.message || JSON.stringify(err)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeactivateCustomer = async (customerId) => {
+    try {
+      setLoading(true);
+      await customersAPI.deactivate(customerId);
+      // Refresh list and close modal
+      await loadCustomers();
+      setShowDetails(false);
+      setSelectedCustomer(null);
+      setCustomerOrders([]);
+      setError(null);
+    } catch (err) {
+      setError('Failed to deactivate customer: ' + (err.message || JSON.stringify(err)));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -78,8 +143,8 @@ const Customers = () => {
         c.username,
         c.email,
         c.registrationDate ? new Date(c.registrationDate).toLocaleDateString() : 'N/A',
-        c.totalOrders,
-        c.totalSpent.toFixed(2),
+        c.totalOrders || 0,
+        (c.totalSpent || 0).toFixed(2),
       ].join(','))
     ].join('\n');
 
@@ -132,9 +197,9 @@ const Customers = () => {
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="relative">
+      {/* Search Bar & Filter */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center space-x-4">
+        <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
@@ -143,6 +208,22 @@ const Customers = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+        </div>
+        <div className="flex items-center space-x-2">
+          <select
+            value={customerFilter}
+            onChange={(e) => { setCustomerFilter(e.target.value); loadCustomers(e.target.value); }}
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Customers</option>
+            <option value="active">Active Customers</option>
+          </select>
+          <button
+            onClick={() => loadCustomers(customerFilter)}
+            className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
