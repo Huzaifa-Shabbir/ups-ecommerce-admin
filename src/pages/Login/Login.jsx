@@ -42,7 +42,8 @@ const Login = () => {
 
     try {
       await login(formData.identifier, formData.password, rememberMe);
-      navigate('/admin/dashboard');
+      // Navigation is handled by the auth context -> Login effect which watches user and token.
+      // Avoid calling navigate here to prevent navigation loops when backend uses session cookies.
     } catch (err) {
       // Error is handled by context
     }
