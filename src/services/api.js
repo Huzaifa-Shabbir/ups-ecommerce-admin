@@ -3,7 +3,10 @@ const API_BASE_URL = "http://localhost:4000/api";
 
 // Helper function to get auth token
 const getAuthToken = () => {
-  return localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
+  const t = localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
+  // Stored values like "null" or "undefined" should be treated as no-token
+  if (!t || t === 'null' || t === 'undefined') return null;
+  return t;
 };
 
 // Helper function for API requests (matching working frontend pattern)
@@ -95,11 +98,13 @@ export const ordersAPI = {
     return data.order || data;
   },
   getDetail: async (id) => {
-    const data = await apiRequest(`/orders/${id}/details`); // Fixed: /details not /detail
-    return data.orderDetail || data;
+    // Backend route is /orders/:id/detail (singular)
+    const data = await apiRequest(`/orders/${id}/detail`);
+    return data.orderDetail || data.order || data;
   },
   getSummary: async () => {
-    const data = await apiRequest('/orders/report'); // Fixed: /report not /summary
+    // Backend route is /orders/summary
+    const data = await apiRequest('/orders/summary');
     return data.report || data;
   },
   getCustomerOrders: async (customerId) => {
@@ -109,6 +114,26 @@ export const ordersAPI = {
   create: (data) => apiRequest('/orders', { method: 'POST', body: JSON.stringify(data) }),
   updateStatus: (id, status) => apiRequest(`/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   delete: (id) => apiRequest(`/orders/${id}`, { method: 'DELETE' }),
+};
+
+// Customers API
+export const customersAPI = {
+  getAll: async () => {
+    const data = await apiRequest('/customer');
+    return Array.isArray(data) ? data : (data.customers || []);
+  },
+  getActive: async () => {
+    const data = await apiRequest('/customer/active');
+    return Array.isArray(data) ? data : (data.customers || []);
+  },
+  getById: async (id) => {
+    const data = await apiRequest(`/customer/active/${id}`);
+    return data.customer || data;
+  },
+  deactivate: async (id) => {
+    const data = await apiRequest(`/customer/${id}`, { method: 'DELETE' });
+    return data;
+  },
 };
 
 // Services API - FIXED ENDPOINTS
