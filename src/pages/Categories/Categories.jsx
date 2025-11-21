@@ -15,7 +15,6 @@ const Categories = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    parent_id: null,
   });
 
   useEffect(() => {
@@ -61,10 +60,15 @@ const Categories = () => {
       setError(null);
       setSuccess(null);
 
+      // Basic validation: require name
+      if (!formData.name || !formData.name.toString().trim()) {
+        setError('Category name is required');
+        return;
+      }
+
       const categoryData = {
         name: formData.name,
         description: formData.description || null,
-        parent_id: formData.parent_id || null,
       };
 
       if (editingCategory) {
@@ -77,7 +81,7 @@ const Categories = () => {
 
       setShowModal(false);
       setEditingCategory(null);
-      setFormData({ name: '', description: '', parent_id: null });
+    setFormData({ name: '', description: '' });
       loadCategories();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -90,7 +94,6 @@ const Categories = () => {
     setFormData({
       name: category.name || '',
       description: category.description || '',
-      parent_id: category.parent_id || null,
     });
     setShowModal(true);
   };
@@ -111,18 +114,6 @@ const Categories = () => {
         setShowDeleteConfirm(null);
         return;
       }
-
-      // Check if category has child categories
-      const childCategories = categories.filter(
-        c => c.parent_id === categoryId || c.parent_id?.toString() === categoryId?.toString()
-      );
-
-      if (childCategories.length > 0) {
-        setError(`Cannot delete category. It has ${childCategories.length} child categor(ies). Please delete or reassign child categories first.`);
-        setShowDeleteConfirm(null);
-        return;
-      }
-
       await categoriesAPI.delete(categoryId);
       setSuccess('Category deleted successfully!');
       setShowDeleteConfirm(null);
@@ -132,6 +123,19 @@ const Categories = () => {
       setError(err.message || 'Failed to delete category');
       setShowDeleteConfirm(null);
     }
+  };
+
+  // Open delete confirm modal with computed blockers so the modal can show details
+  const openDeleteConfirm = (category) => {
+    const categoryId = category.id || category.category_id;
+    const categoryProducts = products.filter(p => {
+      const pCategoryId = p.category_id || p.category?.id;
+      return pCategoryId === categoryId || 
+             pCategoryId?.toString() === categoryId?.toString() ||
+             p.category?.id === categoryId ||
+             p.category?.id?.toString() === categoryId?.toString();
+    });
+    setShowDeleteConfirm({ id: categoryId, products: categoryProducts });
   };
 
   const getCategoryHierarchy = () => {
@@ -195,11 +199,17 @@ const Categories = () => {
         </div>
         <button
           onClick={() => {
+            if (!categories || categories.length === 0) {
+              setError('No parent categories available. Cannot create a category without selecting a parent.');
+              return;
+            }
             setEditingCategory(null);
-            setFormData({ name: '', description: '', parent_id: null });
+            // default to empty string so the select shows the "select" placeholder
+            setFormData({ name: '', description: '', parent_id: '' });
             setShowModal(true);
           }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
+          disabled={(!categories || categories.length === 0)}
+          className={`px-4 py-2 rounded-lg transition flex items-center space-x-2 ${(!categories || categories.length === 0) ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
         >
           <Plus className="w-5 h-5" />
           <span>Add Category</span>
@@ -274,22 +284,12 @@ const Categories = () => {
                 {category.description && (
                   <p className="text-sm text-gray-600 mb-4">{category.description}</p>
                 )}
-                <div className="flex items-center space-x-4 mb-4 text-sm text-gray-600">
-                  <div className="flex items-center space-x-1">
-                    <Package className="w-4 h-4" />
-                    <span>{productCount} product(s)</span>
-                  </div>
-                  {category.parent_id && (
-                    <div className="text-xs text-gray-500">
-                      Parent: {getCategoryName(category.parent_id)}
+                    <div className="flex items-center space-x-4 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center space-x-1">
+                        <Package className="w-4 h-4" />
+                        <span>{productCount} product(s)</span>
+                      </div>
                     </div>
-                  )}
-                  {childCount > 0 && (
-                    <div className="text-xs text-blue-600">
-                      {childCount} child categor(ies)
-                    </div>
-                  )}
-                </div>
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handleEdit(category)}
@@ -299,7 +299,7 @@ const Categories = () => {
                     <span>Edit</span>
                   </button>
                   <button
-                    onClick={() => setShowDeleteConfirm(categoryId)}
+                    onClick={() => openDeleteConfirm(category)}
                     className="px-3 py-2 text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -359,30 +359,7 @@ const Categories = () => {
                   placeholder="Enter category description"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Parent Category (Optional)</label>
-                <select
-                  name="parent_id"
-                  value={formData.parent_id || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">None (Root Category)</option>
-                  {categories
-                    .filter(cat => {
-                      const id = cat.id || cat.category_id;
-                      return !editingCategory || id !== (editingCategory.id || editingCategory.category_id);
-                    })
-                    .map((cat) => (
-                      <option key={cat.id || cat.category_id} value={cat.id || cat.category_id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Select a parent category to create a hierarchy
-                </p>
-              </div>
+                {/* Parent category removed - backend does not support hierarchical categories */}
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
@@ -413,23 +390,52 @@ const Categories = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this category? This action cannot be undone.
-            </p>
-            <div className="flex items-center justify-end space-x-3">
-              <button
-                onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(showDeleteConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-              >
-                Delete
-              </button>
-            </div>
+            <p className="text-gray-600 mb-4">Are you sure you want to delete this category? This action cannot be undone.</p>
+
+            {/* Show product blockers if any */}
+            {showDeleteConfirm.products && showDeleteConfirm.products.length > 0 ? (
+              <>
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm text-yellow-800 mb-2">This category has the following associated product(s):</p>
+                  <ul className="list-disc list-inside text-sm text-yellow-900">
+                    {showDeleteConfirm.products.map((p) => (
+                      <li key={p.id || p.product_id || p.name}>{p.name || `Product ${p.id || p.product_id}`}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-yellow-700 mt-2">Please reassign or remove these products before deleting the category.</p>
+                </div>
+
+                <div className="flex items-center justify-end space-x-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(null)}
+                    className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled
+                    className="px-4 py-2 bg-gray-300 text-gray-600 rounded-lg cursor-not-allowed"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDelete(showDeleteConfirm.id)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
