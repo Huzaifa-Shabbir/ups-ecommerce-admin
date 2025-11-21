@@ -52,11 +52,14 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_AUTH_BASE}/login`, {
+      // The backend exposes role-specific login endpoints. Admins must authenticate
+      // at /api/auth/login/admin and the backend expects { email, password } in the body.
+      const res = await fetch(`${API_AUTH_BASE}/login/admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // receive refresh token cookie
-        body: JSON.stringify({ identifier, password }),
+        // map the identifier field (email or username) to `email` which the backend expects
+        body: JSON.stringify({ email: identifier, password }),
       });
 
       if (!res.ok) {
@@ -67,36 +70,45 @@ export const AuthProvider = ({ children }) => {
       }
 
       const data = await parseResponse(res);
-      
-      // Backend returns { token, user: { user_id, email, username, role } }
-      // We need to normalize it
-      const authToken = data.token || data.accessToken;
+
+      // Backend returns shape like { success: true, user: { ... } } or { error: '...' }
+      if (data.error) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      // Normalize response: token may not be provided; backend may rely on session cookies
+      const authToken = data.token || data.accessToken || null;
       const userData = data.user || data;
-      
+
       // Check if user is admin
       if (userData && userData.role !== 'admin') {
         throw new Error('Access denied. Admin privileges required.');
       }
 
-      // Normalize user data format
       const normalizedUser = {
         id: userData.user_id || userData.id,
         email: userData.email,
         username: userData.username,
         role: userData.role || 'user',
       };
-      
-      setToken(authToken);
+
+  // If backend uses session cookies and does not return an auth token,
+  // use a short-lived sentinel value to represent an authenticated session
+  // on the client. We don't persist this sentinel to storage.
+  setToken(authToken || 'session');
       setUser(normalizedUser);
 
+      // Only persist token if it's a non-null/non-undefined value. Some backends
+      // rely on session cookies instead of returning a token; avoid storing
+      // the literal 'null' which causes the frontend to send Authorization: Bearer null.
       if (rememberMe) {
-        localStorage.setItem(TOKEN_KEY, authToken);
+        if (authToken) localStorage.setItem(TOKEN_KEY, authToken);
         localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
         localStorage.setItem(REMEMBER_ME_KEY, 'true');
         sessionStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(USER_KEY);
       } else {
-        sessionStorage.setItem(TOKEN_KEY, authToken);
+        if (authToken) sessionStorage.setItem(TOKEN_KEY, authToken);
         sessionStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
