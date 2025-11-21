@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ordersAPI } from '../../services/api';
+import { ordersAPI, productsAPI } from '../../services/api';
 import { ShoppingCart, Search, Filter, Eye, X, Save, AlertCircle, CheckCircle, Calendar, User, DollarSign, Package } from 'lucide-react';
+import OrdersSummary from '../../components/OrdersSummary/OrdersSummary';
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
@@ -38,14 +39,66 @@ const Orders = () => {
     }
   };
 
+  const getOrderDate = (order) => {
+    // backend may return different field names: order_date, created_at, or nested under order/orderDetail
+    const dateVal = order?.order_date || order?.created_at || order?.order?.order_date || order?.orderDetail?.order?.order_date || order?.orderDetail?.order_date;
+    if (!dateVal) return null;
+    try {
+      return new Date(dateVal);
+    } catch (e) {
+      return null;
+    }
+  };
+
   const loadOrderDetails = async (orderId) => {
     try {
-      const data = await ordersAPI.getById(orderId);
-      const order = data.order || data;
-      setSelectedOrder(order);
+      // Prefer the "full detail" endpoint which returns richer product/category info
+      const data = await ordersAPI.getDetail(orderId).catch(async (err) => {
+        // If full detail fails, fall back to basic by-id endpoint
+        console.warn('getDetail failed, falling back to getById:', err.message);
+        const fallback = await ordersAPI.getById(orderId);
+        return fallback;
+      });
+
+      // Normalize different possible response shapes from the backend RPCs
+      // Possible shapes observed:
+      // { order: { items: [...], order: { ... } } }
+      // { orderDetail: { items: [...], order: { ... } } }
+      // or { items: [...], ...meta }
+  let items = data.items || (data.order && data.order.items) || (data.orderDetail && data.orderDetail.items) || [];
+      let meta = data.order || data.orderDetail || {};
+
+      // Sometimes the RPC nests order info under 'order.order'
+      if (meta.order) meta = meta.order;
+
+      const normalized = {
+        ...meta,
+        items,
+      };
+
+      // Enrich items with product names when missing
+      if (items && items.length > 0) {
+        const enriched = await Promise.all(items.map(async (it) => {
+          const productId = it.product_id || it.productId || it.product_id; // try common variants
+          // prefer existing name if present
+          if (it.product_name || it.name) return { ...it, product_name: it.product_name || it.name };
+          if (!productId) return it;
+          try {
+            const prod = await productsAPI.getById(productId);
+            const name = prod?.name || prod?.product_name || prod?.title || prod?.product || null;
+            return { ...it, product_name: name };
+          } catch (e) {
+            return it;
+          }
+        }));
+        normalized.items = enriched;
+      }
+
+      setSelectedOrder(normalized);
       setShowDetails(true);
     } catch (err) {
-      setError('Failed to load order details: ' + err.message);
+      // Surface meaningful server error messages when available
+      setError('Failed to load order details: ' + (err.message || JSON.stringify(err)));
     }
   };
 
@@ -90,19 +143,38 @@ const Orders = () => {
   };
 
   const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.id?.toString().includes(searchTerm) ||
-      order.order_id?.toString().includes(searchTerm) ||
-      order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (order.customer_id || order.user_id)?.toString().includes(searchTerm);
+    const cleaned = (searchTerm || '').toString().trim();
 
+    // Status filter
     const matchesStatus =
-      statusFilter === 'all' ||
-      (order.status?.toLowerCase() === statusFilter.toLowerCase());
+      statusFilter === 'all' || (order.status?.toLowerCase() === statusFilter.toLowerCase());
 
-    return matchesSearch && matchesStatus;
+    // If no search term, include by status only
+    if (!cleaned) return matchesStatus;
+
+    // If search term looks like a UUID or long alphanumeric id, try exact id matches against order and customer ids
+    const looksLikeId = /[0-9a-fA-F]{8,}/.test(cleaned) && (cleaned.includes('-') || cleaned.length >= 8);
+    if (looksLikeId) {
+      const n = cleaned;
+      const idCandidates = [order.id, order.order_id, order.order?.order_id, order.order?.id, order.customer_id, order.user_id];
+      const matchesId = idCandidates.some((v) => v && v.toString() === n);
+      return matchesId && matchesStatus;
+    }
+
+    // If search term is purely numeric, try exact numeric matches against order ids
+    if (/^\d+$/.test(cleaned)) {
+      const n = cleaned;
+      const idCandidates = [order.id, order.order_id, order.order?.order_id, order.order?.id];
+      const matchesId = idCandidates.some((v) => v && v.toString() === n);
+      return matchesId && matchesStatus;
+    }
+
+    // For any other input, only match against customer id/user id substrings (no name matching)
+    const idMatch = (order.customer_id || order.user_id || '').toString().toLowerCase().includes(cleaned.toLowerCase());
+    return idMatch && matchesStatus;
   });
+
+  // No customer-name lookup: search is restricted to order ID and customer ID only.
 
   if (loading) {
     return (
@@ -120,6 +192,8 @@ const Orders = () => {
           <p className="text-gray-600 mt-1">View and manage customer orders</p>
         </div>
       </div>
+
+      <OrdersSummary />
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
@@ -147,7 +221,7 @@ const Orders = () => {
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
-            placeholder="Search by order ID, customer name, or email..."
+            placeholder="Search by order ID or customer id..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -203,13 +277,10 @@ const Orders = () => {
                     </div>
                   </td>
                   <td className="py-4 px-6 text-gray-600">
-                    {order.created_at
-                      ? new Date(order.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })
-                      : 'N/A'}
+                    {(() => {
+                      const d = getOrderDate(order);
+                      return d ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                    })()}
                   </td>
                   <td className="py-4 px-6 text-gray-900 font-semibold">
                     ${parseFloat(order.total_amount || order.amount || 0).toFixed(2)}
@@ -286,9 +357,10 @@ const Orders = () => {
                     <span>Order Date</span>
                   </h3>
                   <p className="text-gray-900">
-                    {selectedOrder.created_at
-                      ? new Date(selectedOrder.created_at).toLocaleString('en-US')
-                      : 'N/A'}
+                    {(() => {
+                      const d = getOrderDate(selectedOrder);
+                      return d ? d.toLocaleString('en-US') : 'N/A';
+                    })()}
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
