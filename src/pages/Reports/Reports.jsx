@@ -16,6 +16,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import OrdersSummary from '../../components/OrdersSummary/OrdersSummary';
 
 const Reports = () => {
   const [stats, setStats] = useState(null);
@@ -157,6 +158,9 @@ const Reports = () => {
           </button>
         </div>
       </div>
+
+  {/* Top-level Orders Summary (KPIs) */}
+  <OrdersSummary />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
