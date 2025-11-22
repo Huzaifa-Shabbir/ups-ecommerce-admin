@@ -20,11 +20,12 @@ const Products = () => {
   const [bulkEnableQty, setBulkEnableQty] = useState('1');
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    price: '',
-    description: '',
-    category_id: '',
-    stock: 0,
+  name: '',
+  price: '',
+  description: '',
+  category_id: '',
+  stock: 0,
+  image: '',
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -110,11 +111,12 @@ const Products = () => {
         : rawStock; // for creation send numeric
 
       const productData = {
-        name: formData.name,
-        price: parseFloat(formData.price),
-        description: formData.description,
-        category_id: formData.category_id || null,
-        stock: stockPayload,
+  name: formData.name,
+  price: parseFloat(formData.price),
+  description: formData.description,
+  category_id: formData.category_id || null,
+  stock: stockPayload,
+  image: formData.image || null,
       };
 
       if (editingProduct) {
@@ -128,6 +130,7 @@ const Products = () => {
       setShowModal(false);
       setEditingProduct(null);
   setFormData({ name: '', price: '', description: '', category_id: '', stock: 0 });
+  setFormData({ name: '', price: '', description: '', category_id: '', stock: 0, image: '' });
             setFormErrors({});
       setFormErrors({});
       
@@ -144,9 +147,9 @@ const Products = () => {
       name: product.name || '',
       price: product.price || '',
       description: product.description || '',
-      // product may embed category object
       category_id: product.category_id ?? product.category?.id ?? '',
       stock: getQuantity(product) ?? 0,
+      image: product.image || '',
     });
     setShowModal(true);
     setFormErrors({});
@@ -406,103 +409,52 @@ const Products = () => {
       )}
 
       {/* Products Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* Products Card Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {filteredProducts.length > 0 ? (
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left py-3 px-6">
-                  <button onClick={toggleSelectAll} className="p-1 hover:bg-gray-200 rounded">
-                    {selectedProducts.length === filteredProducts.length ? (
-                      <CheckSquare className="w-5 h-5 text-blue-600" />
-                    ) : (
-                      <Square className="w-5 h-5 text-gray-400" />
-                    )}
+          filteredProducts.map((product) => (
+            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+              <div className="h-48 w-full bg-gray-100 flex items-center justify-center">
+                {product.image ? (
+                  <img src={product.image} alt={product.name} className="object-contain h-40 w-full" />
+                ) : (
+                  <Package className="w-16 h-16 text-gray-300" />
+                )}
+              </div>
+              <div className="p-4 flex-1 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-lg text-gray-900">{product.name || 'Unnamed Product'}</span>
+                  <span className="text-sm font-semibold text-blue-600">${parseFloat(product.price || 0).toFixed(2)}</span>
+                </div>
+                <p className="text-sm text-gray-500 mb-2">{product.description?.substring(0, 60) || 'No description'}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-700">Qty: {getQuantity(product) ?? 'N/A'}</span>
+                  <span className="text-xs text-gray-700">{getCategoryName(product.category ?? product.category_id)}</span>
+                </div>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getQuantity(product) > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {getQuantity(product) > 0 ? 'Available' : 'Unavailable'}
+                </span>
+                <div className="flex items-center justify-end space-x-2 mt-4">
+                  <button
+                    onClick={() => handleEdit(product)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                    title="Edit"
+                  >
+                    <Edit className="w-4 h-4" />
                   </button>
-                </th>
-                <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">ID</th>
-                <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Name</th>
-                <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Price</th>
-                <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Quantity</th>
-                <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Category</th>
-                <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Status</th>
-                <th className="text-right py-3 px-6 text-sm font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map((product) => (
-                <tr key={product.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
-                  <td className="py-4 px-6">
-                    <button
-                      onClick={() => toggleSelectProduct(product.id)}
-                      className="p-1 hover:bg-gray-200 rounded"
-                    >
-                      {selectedProducts.includes(product.id) ? (
-                        <CheckSquare className="w-5 h-5 text-blue-600" />
-                      ) : (
-                        <Square className="w-5 h-5 text-gray-400" />
-                      )}
-                    </button>
-                  </td>
-                  <td className="py-4 px-6 text-gray-600">#{product.id}</td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center space-x-3">
-                      <Package className="w-6 h-6 text-gray-400" />
-                      <div>
-                        <p className="font-semibold text-gray-900">{product.name || 'Unnamed Product'}</p>
-                        {product.description && (
-                          <p className="text-sm text-gray-500">{product.description.substring(0, 50)}...</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 text-gray-900 font-semibold">
-                    ${parseFloat(product.price || 0).toFixed(2)}
-                  </td>
-                  <td className="py-4 px-6 text-gray-700">
-                    {(() => {
-                      const q = getQuantity(product);
-                      return q !== null && typeof q !== 'undefined' ? q : 'N/A';
-                    })()}
-                  </td>
-                  <td className="py-4 px-6 text-gray-600">{getCategoryName(product.category ?? product.category_id)}</td>
-                  <td className="py-4 px-6">
-                    {(() => {
-                      const q = getQuantity(product);
-                      const available = q !== null && typeof q !== 'undefined' ? q > 0 : (product.is_available !== false);
-                      return (
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
-                        >
-                          {available ? 'Available' : 'Unavailable'}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center justify-end space-x-2">
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setShowDeleteConfirm(product.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <button
+                    onClick={() => setShowDeleteConfirm(product.id)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
         ) : (
-          <div className="text-center py-12">
+          <div className="text-center py-12 col-span-full">
             <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">No products found</p>
           </div>
@@ -530,6 +482,17 @@ const Products = () => {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Image URL</label>
+                <input
+                  type="text"
+                  name="image"
+                  value={formData.image}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="https://example.com/image.jpg"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Product Name *</label>
                 <input

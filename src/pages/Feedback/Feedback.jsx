@@ -1,21 +1,21 @@
 import { useState, useEffect } from 'react';
 import { feedbackAPI } from '../../services/api';
-import { MessageSquare, Trash2, Star, Search, Filter, X, AlertCircle, CheckCircle, Reply, Send } from 'lucide-react';
+import { MessageSquare, Trash2, Star, Search, Filter, X, AlertCircle, CheckCircle } from 'lucide-react';
 
 const Feedback = () => {
   const [feedback, setFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  // Remove general search bar
+  const [searchOrderId, setSearchOrderId] = useState('');
+  const [searchCustomerId, setSearchCustomerId] = useState('');
   const [ratingFilter, setRatingFilter] = useState('all');
   const [fetchFilter, setFetchFilter] = useState('all'); // all | customer | order
   const [filterValue, setFilterValue] = useState('');
   const [isApplyingFilter, setIsApplyingFilter] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [selectedFeedback, setSelectedFeedback] = useState(null);
-  const [showResponseModal, setShowResponseModal] = useState(false);
-  const [responseText, setResponseText] = useState('');
 
   useEffect(() => {
     loadFeedback();
@@ -65,6 +65,42 @@ const Feedback = () => {
     }
   };
 
+  // Search by order ID
+  const handleSearchByOrderId = async (e) => {
+    e.preventDefault();
+    if (!searchOrderId.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await feedbackAPI.getByOrder(searchOrderId.trim());
+      const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
+      setFeedback(feedbackList);
+    } catch (err) {
+      setError(err.message || 'Failed to fetch feedback by order ID');
+      setFeedback([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Search by customer ID
+  const handleSearchByCustomerId = async (e) => {
+    e.preventDefault();
+    if (!searchCustomerId.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await feedbackAPI.getByCustomer(searchCustomerId.trim());
+      const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
+      setFeedback(feedbackList);
+    } catch (err) {
+      setError(err.message || 'Failed to fetch feedback by customer ID');
+      setFeedback([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDelete = async (feedbackId) => {
     try {
       await feedbackAPI.delete(feedbackId);
@@ -96,29 +132,6 @@ const Feedback = () => {
     await loadFeedback('all', '');
   };
 
-  const handleSendResponse = async () => {
-    if (!responseText.trim() || !selectedFeedback) return;
-
-    try {
-      setError(null);
-      setSuccess(null);
-      // Note: You'll need to add a response endpoint to your backend API
-      // For now, this is a placeholder
-      setSuccess('Response sent successfully!');
-      setShowResponseModal(false);
-      setResponseText('');
-      setSelectedFeedback(null);
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError(err.message || 'Failed to send response');
-    }
-  };
-
-  const openResponseModal = (item) => {
-    setSelectedFeedback(item);
-    setResponseText(item.response || '');
-    setShowResponseModal(true);
-  };
 
   const normalizeComment = (item) => item.comment || item.feedback_message || item.message || '';
   const normalizeCustomerName = (item) =>
@@ -130,23 +143,8 @@ const Feedback = () => {
   const normalizeId = (item) =>
     item.id || item.feedback_id || item.feedbackId || `${item.customer_id ?? ''}-${item.order_no ?? ''}`;
 
-  const filteredFeedback = feedback.filter((item) => {
-    const commentText = normalizeComment(item);
-    const customerName = normalizeCustomerName(item);
-    const customerEmail = item.customer_email || '';
-    const itemId = normalizeId(item);
-    const matchesSearch =
-      commentText.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      itemId?.toString().includes(searchTerm);
-
-    const matchesRating =
-      ratingFilter === 'all' ||
-      item.rating?.toString() === ratingFilter;
-
-    return matchesSearch && matchesRating;
-  });
+  // No general search, just use feedback as-is
+  const filteredFeedback = feedback;
 
   if (loading) {
     return (
@@ -185,76 +183,56 @@ const Feedback = () => {
         </div>
       )}
 
-      {/* Search and Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-4 md:space-y-0">
-          <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search feedback..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={ratingFilter}
-              onChange={(e) => setRatingFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Ratings</option>
-              <option value="5">5 Stars</option>
-              <option value="4">4 Stars</option>
-              <option value="3">3 Stars</option>
-              <option value="2">2 Stars</option>
-              <option value="1">1 Star</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex flex-col lg:flex-row lg:items-end lg:space-x-4 space-y-4 lg:space-y-0">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Fetch Feedback By</label>
-            <div className="flex flex-col md:flex-row md:items-center md:space-x-3 space-y-3 md:space-y-0">
-              <select
-                value={fetchFilter}
-                onChange={(e) => setFetchFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent md:w-48"
-              >
-                <option value="all">All Feedback</option>
-                <option value="customer">Customer ID</option>
-                <option value="order">Order ID</option>
-              </select>
-              {fetchFilter !== 'all' && (
-                <input
-                  type="text"
-                  value={filterValue}
-                  onChange={(e) => setFilterValue(e.target.value)}
-                  placeholder={`Enter ${fetchFilter} ID`}
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              )}
+      {/* Search by Order ID and Customer ID */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
+        <form className="flex-1 relative" onSubmit={async (e) => {
+          e.preventDefault();
+          if (!searchOrderId.trim() && !searchCustomerId.trim()) {
+            // Show all feedbacks
+            setLoading(true);
+            setError(null);
+            try {
+              const data = await feedbackAPI.getAll();
+              const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
+              setFeedback(feedbackList);
+            } catch (err) {
+              setError(err.message || 'Failed to fetch feedback');
+              setFeedback([]);
+            } finally {
+              setLoading(false);
+            }
+            return;
+          }
+          if (searchOrderId.trim()) {
+            await handleSearchByOrderId(e);
+          } else if (searchCustomerId.trim()) {
+            await handleSearchByCustomerId(e);
+          }
+        }}>
+          <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-3 md:space-y-0">
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search by Order ID..."
+                value={searchOrderId}
+                onChange={(e) => setSearchOrderId(e.target.value)}
+                className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search by Customer ID..."
+                value={searchCustomerId}
+                onChange={(e) => setSearchCustomerId(e.target.value)}
+                className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Go</button>
           </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleApplyFilter}
-              disabled={isApplyingFilter}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isApplyingFilter ? 'Applying...' : 'Apply'}
-            </button>
-            <button
-              onClick={handleResetFilter}
-              className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
+        </form>
       </div>
 
       {/* Feedback List */}
@@ -283,6 +261,9 @@ const Feedback = () => {
                               day: 'numeric',
                             })
                           : 'N/A'}
+                        {item.order_no || item.order_id ? (
+                          <span className="ml-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">Order ID: {item.order_no || item.order_id}</span>
+                        ) : null}
                       </p>
                     </div>
                   </div>
@@ -310,15 +291,6 @@ const Feedback = () => {
                   )}
                 </div>
                 <div className="flex items-center space-x-2 ml-4">
-                  {!item.response && (
-                    <button
-                      onClick={() => openResponseModal(item)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                      title="Respond"
-                    >
-                      <Reply className="w-5 h-5" />
-                    </button>
-                  )}
                   <button
                     onClick={() => setShowDeleteConfirm(itemId)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
@@ -339,59 +311,6 @@ const Feedback = () => {
         )}
       </div>
 
-      {/* Response Modal */}
-      {showResponseModal && selectedFeedback && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Respond to Feedback</h3>
-              <button
-                onClick={() => {
-                  setShowResponseModal(false);
-                  setSelectedFeedback(null);
-                  setResponseText('');
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-2">Customer Feedback:</p>
-              <p className="text-gray-900">{selectedFeedback.comment}</p>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Your Response</label>
-              <textarea
-                value={responseText}
-                onChange={(e) => setResponseText(e.target.value)}
-                rows="4"
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter your response to the customer..."
-              />
-            </div>
-            <div className="flex items-center justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowResponseModal(false);
-                  setSelectedFeedback(null);
-                  setResponseText('');
-                }}
-                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendResponse}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
-              >
-                <Send className="w-4 h-4" />
-                <span>Send Response</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

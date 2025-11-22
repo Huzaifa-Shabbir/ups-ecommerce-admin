@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dashboardAPI, ordersAPI, productsAPI, categoriesAPI } from '../../services/api';
+import { dashboardAPI, ordersAPI, productsAPI, categoriesAPI, paymentsAPI } from '../../services/api';
 import { BarChart3, TrendingUp, Download, Calendar, AlertCircle, FileText } from 'lucide-react';
 import {
   LineChart,
@@ -22,28 +22,32 @@ const Reports = () => {
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadReports();
+  loadReports();
   }, []);
 
   const loadReports = async () => {
     try {
       setLoading(true);
-      const [dashboardData, ordersData, productsData] = await Promise.all([
+      const [dashboardData, ordersData, productsData, paymentsData] = await Promise.all([
         dashboardAPI.getStats(),
         ordersAPI.getAll(),
         productsAPI.getAll(),
+        paymentsAPI.getAll(),
       ]);
 
       const ordersList = Array.isArray(ordersData) ? ordersData : (ordersData.orders || []);
       const productsList = Array.isArray(productsData) ? productsData : (productsData.products || []);
+      const paymentsList = Array.isArray(paymentsData) ? paymentsData : (paymentsData.payments || []);
 
       setStats(dashboardData);
       setOrders(ordersList);
       setProducts(productsList);
+      setPayments(paymentsList);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -105,15 +109,30 @@ const Reports = () => {
     { name: 'Cancelled', value: orders.filter(o => o.status === 'cancelled').length },
   ];
 
-  // Monthly revenue data (mock - replace with real data)
-  const monthlyRevenue = [
-    { name: 'Jan', revenue: 4000, orders: 24 },
-    { name: 'Feb', revenue: 3000, orders: 13 },
-    { name: 'Mar', revenue: 5000, orders: 28 },
-    { name: 'Apr', revenue: 4500, orders: 22 },
-    { name: 'May', revenue: 6000, orders: 30 },
-    { name: 'Jun', revenue: 5500, orders: 27 },
-  ];
+  // Monthly revenue data (real)
+  const monthlyRevenue = (() => {
+    // Group payments by month
+    const revenueByMonth = {};
+    payments.forEach(payment => {
+      if (!payment.date && !payment.created_at) return;
+      const dateStr = payment.date || payment.created_at;
+      const date = new Date(dateStr);
+      if (isNaN(date)) return;
+      const month = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      if (!revenueByMonth[month]) revenueByMonth[month] = { revenue: 0, orders: 0 };
+      revenueByMonth[month].revenue += parseFloat(payment.amount) || 0;
+      revenueByMonth[month].orders += 1;
+    });
+    // Sort months chronologically
+    const sortedMonths = Object.keys(revenueByMonth).sort((a, b) => {
+      const [aMonth, aYear] = a.split(' ');
+      const [bMonth, bYear] = b.split(' ');
+      const aDate = new Date(`${aMonth} 1, ${aYear}`);
+      const bDate = new Date(`${bMonth} 1, ${bYear}`);
+      return aDate - bDate;
+    });
+    return sortedMonths.map(month => ({ name: month, ...revenueByMonth[month] }));
+  })();
 
   const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
 
@@ -159,11 +178,10 @@ const Reports = () => {
         </div>
       </div>
 
-  {/* Top-level Orders Summary (KPIs) */}
-  <OrdersSummary />
+
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -173,15 +191,6 @@ const Reports = () => {
               </p>
             </div>
             <TrendingUp className="w-8 h-8 text-green-500" />
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Total Orders</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.totalOrders || 0}</p>
-            </div>
-            <BarChart3 className="w-8 h-8 text-blue-500" />
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -229,71 +238,9 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Revenue Overview</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={monthlyRevenue}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} name="Revenue ($)" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
 
-        {/* Order Status Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Order Status Distribution</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={orderStatusData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, value }) => `${name}: ${value}`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {orderStatusData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
 
-      {/* Product Performance */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Product Performance Metrics</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-blue-50 rounded-lg p-4">
-            <p className="text-sm font-medium text-blue-700 mb-1">Total Products</p>
-            <p className="text-2xl font-bold text-blue-900">{products.length}</p>
-          </div>
-          <div className="bg-green-50 rounded-lg p-4">
-            <p className="text-sm font-medium text-green-700 mb-1">Available Products</p>
-            <p className="text-2xl font-bold text-green-900">
-              {products.filter(p => p.is_available !== false).length}
-            </p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm font-medium text-gray-700 mb-1">Unavailable Products</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {products.filter(p => p.is_available === false).length}
-            </p>
-          </div>
-        </div>
-      </div>
+
 
       {/* Customer Analytics */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

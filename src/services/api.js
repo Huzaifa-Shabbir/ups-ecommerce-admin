@@ -1,3 +1,24 @@
+// Service Requests API
+export const serviceRequestsAPI = {
+  getAll: async () => {
+    const data = await apiRequest('/service-requests');
+    return Array.isArray(data) ? data : (data.requests || []);
+  },
+  getByUser: async (userId) => {
+    const data = await apiRequest(`/service-requests/user/${userId}`);
+    return Array.isArray(data) ? data : (data.requests || []);
+  },
+  getByTechnician: async (technicianId) => {
+    const data = await apiRequest(`/service-requests/technician/${technicianId}`);
+    return Array.isArray(data) ? data : (data.requests || []);
+  },
+  create: (data) => apiRequest('/service-requests', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => apiRequest(`/service-requests/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id) => apiRequest(`/service-requests/${id}`, { method: 'DELETE' }),
+  assignTechnician: (id, technicianId) => apiRequest(`/service-requests/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ technician_id: technicianId }) }),
+  decline: (id) => apiRequest(`/service-requests/${id}/decline`, { method: 'PATCH' }),
+  complete: (id) => apiRequest(`/service-requests/${id}/complete`, { method: 'PATCH' }),
+};
 const API_BASE_URL = "http://localhost:4000/api";
 
 

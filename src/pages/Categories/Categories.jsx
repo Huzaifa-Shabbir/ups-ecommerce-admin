@@ -15,6 +15,7 @@ const Categories = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    image: '',
   });
 
   useEffect(() => {
@@ -69,6 +70,7 @@ const Categories = () => {
       const categoryData = {
         name: formData.name,
         description: formData.description || null,
+        image: formData.image || null,
       };
 
       if (editingCategory) {
@@ -81,7 +83,7 @@ const Categories = () => {
 
       setShowModal(false);
       setEditingCategory(null);
-    setFormData({ name: '', description: '' });
+  setFormData({ name: '', description: '', image: '' });
       loadCategories();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -94,6 +96,7 @@ const Categories = () => {
     setFormData({
       name: category.name || '',
       description: category.description || '',
+      image: category.image || '',
     });
     setShowModal(true);
   };
@@ -281,15 +284,18 @@ const Categories = () => {
                     </div>
                   </div>
                 </div>
+                {category.image && (
+                  <img src={category.image} alt={category.name} className="mb-4 rounded-lg w-full h-32 object-cover border" />
+                )}
                 {category.description && (
                   <p className="text-sm text-gray-600 mb-4">{category.description}</p>
                 )}
-                    <div className="flex items-center space-x-4 mb-4 text-sm text-gray-600">
-                      <div className="flex items-center space-x-1">
-                        <Package className="w-4 h-4" />
-                        <span>{productCount} product(s)</span>
-                      </div>
-                    </div>
+                <div className="flex items-center space-x-4 mb-4 text-sm text-gray-600">
+                  <div className="flex items-center space-x-1">
+                    <Package className="w-4 h-4" />
+                    <span>{productCount} product(s)</span>
+                  </div>
+                </div>
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handleEdit(category)}
@@ -359,14 +365,24 @@ const Categories = () => {
                   placeholder="Enter category description"
                 />
               </div>
-                {/* Parent category removed - backend does not support hierarchical categories */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Image URL</label>
+                <input
+                  type="text"
+                  name="image"
+                  value={formData.image || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Paste image URL here"
+                />
+              </div>
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false);
                     setEditingCategory(null);
-                    setFormData({ name: '', description: '', parent_id: null });
+                    setFormData({ name: '', description: '', image: '', parent_id: null });
                   }}
                   className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
                 >

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { dashboardAPI } from '../../services/api';
+import { dashboardAPI, paymentsAPI, ordersAPI } from '../../services/api';
 import {
   Package,
   Users,
@@ -66,15 +66,60 @@ const Dashboard = () => {
     }
   };
 
-  // Mock chart data (replace with real data from API)
-  const revenueData = [
-    { name: 'Jan', revenue: 4000, orders: 24 },
-    { name: 'Feb', revenue: 3000, orders: 13 },
-    { name: 'Mar', revenue: 5000, orders: 28 },
-    { name: 'Apr', revenue: 4500, orders: 22 },
-    { name: 'May', revenue: 6000, orders: 30 },
-    { name: 'Jun', revenue: 5500, orders: 27 },
-  ];
+  const [payments, setPayments] = useState([]);
+  const [orders, setOrders] = useState([]);
+
+  useEffect(() => {
+    loadDashboardData();
+    loadChartData();
+  }, []);
+
+  const loadChartData = async () => {
+    try {
+      const paymentsData = await paymentsAPI.getAll();
+      const ordersData = await ordersAPI.getAll();
+      const paymentsList = Array.isArray(paymentsData) ? paymentsData : (paymentsData.payments || []);
+      const ordersList = Array.isArray(ordersData) ? ordersData : (ordersData.orders || []);
+      setPayments(paymentsList);
+      setOrders(ordersList);
+    } catch (err) {
+      // Ignore chart errors for now
+    }
+  };
+
+  // Group payments and orders by month
+  const revenueData = (() => {
+    const revenueByMonth = {};
+    payments.forEach(payment => {
+      // Use payment.date or payment.created_at for payments, fallback if needed
+      const dateStr = payment.date || payment.created_at;
+      const date = new Date(dateStr);
+      if (isNaN(date)) return;
+      const month = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      if (!revenueByMonth[month]) revenueByMonth[month] = { revenue: 0, orders: 0 };
+      // Use payment.amount for revenue
+      revenueByMonth[month].revenue += parseFloat(payment.amount) || 0;
+    });
+    orders.forEach(order => {
+      // Use order.order_date for orders
+      const dateStr = order.order_date;
+      const date = new Date(dateStr);
+      if (isNaN(date)) return;
+      const month = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      if (!revenueByMonth[month]) revenueByMonth[month] = { revenue: 0, orders: 0 };
+      // Use order.total_amount for revenue if needed, but only count orders for chart
+      revenueByMonth[month].orders += 1;
+    });
+    // Sort months chronologically
+    const sortedMonths = Object.keys(revenueByMonth).sort((a, b) => {
+      const [aMonth, aYear] = a.split(' ');
+      const [bMonth, bYear] = b.split(' ');
+      const aDate = new Date(`${aMonth} 1, ${aYear}`);
+      const bDate = new Date(`${bMonth} 1, ${bYear}`);
+      return aDate - bDate;
+    });
+    return sortedMonths.map(month => ({ name: month, ...revenueByMonth[month] }));
+  })();
 
   const statCards = [
     {
@@ -100,7 +145,7 @@ const Dashboard = () => {
     },
     {
       title: 'Total Revenue',
-      value: `$${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `$${payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
       color: 'bg-yellow-500',
       link: '/admin/payments',

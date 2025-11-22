@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
-import { servicesAPI, slotsAPI } from '../../services/api';
+import { servicesAPI, slotsAPI, serviceRequestsAPI } from '../../services/api';
 import { Wrench, Plus, Edit, Trash2, Search, Save, X, AlertCircle, CheckCircle, ToggleLeft, ToggleRight, Calendar, Clock } from 'lucide-react';
 
 const Services = () => {
+  // Service Requests state
+  // Service Requests state
+  const [serviceRequests, setServiceRequests] = useState([]);
+  const [serviceRequestsLoading, setServiceRequestsLoading] = useState(false);
+  const [serviceRequestsError, setServiceRequestsError] = useState(null);
+  const [serviceRequestsSuccess, setServiceRequestsSuccess] = useState(null);
+  const [serviceRequestsSearch, setServiceRequestsSearch] = useState('');
+  const [assignTechnicianModal, setAssignTechnicianModal] = useState(null); // { request, technicianId }
+  const [assignTechnicianId, setAssignTechnicianId] = useState('');
+  const [serviceRequestsUserId, setServiceRequestsUserId] = useState('');
+  const [serviceRequestsTechnicianId, setServiceRequestsTechnicianId] = useState('');
   const [services, setServices] = useState([]);
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +33,6 @@ const Services = () => {
   const [showDeleteSlotConfirm, setShowDeleteSlotConfirm] = useState(null);
   
   const [serviceFormData, setServiceFormData] = useState({
-    service_name: '',
     name: '',
     description: '',
     price: '',
@@ -41,6 +51,98 @@ const Services = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Load service requests when tab is 'requests'
+  useEffect(() => {
+    if (activeTab === 'requests') {
+      setServiceRequestsLoading(true);
+      let fetchPromise;
+      if (serviceRequestsUserId) {
+        fetchPromise = serviceRequestsAPI.getByUser(serviceRequestsUserId);
+      } else if (serviceRequestsTechnicianId) {
+        fetchPromise = serviceRequestsAPI.getByTechnician(serviceRequestsTechnicianId);
+      } else {
+        fetchPromise = serviceRequestsAPI.getAll();
+      }
+      fetchPromise
+        .then((data) => {
+          setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+          setServiceRequestsError(null);
+        })
+        .catch((err) => {
+          setServiceRequestsError('Failed to load service requests');
+        })
+        .finally(() => setServiceRequestsLoading(false));
+    }
+  }, [activeTab, serviceRequestsUserId, serviceRequestsTechnicianId]);
+  // UI handlers for user/technician filter
+  const handleServiceRequestsUserIdChange = (e) => {
+    setServiceRequestsUserId(e.target.value);
+    setServiceRequestsTechnicianId('');
+  };
+  const handleServiceRequestsTechnicianIdChange = (e) => {
+    setServiceRequestsTechnicianId(e.target.value);
+    setServiceRequestsUserId('');
+  };
+  // Service Requests actions
+  const handleAssignTechnician = async (requestId, technicianId) => {
+    try {
+      setServiceRequestsError(null);
+      setServiceRequestsSuccess(null);
+      await serviceRequestsAPI.assignTechnician(requestId, technicianId);
+      setServiceRequestsSuccess('Technician assigned successfully!');
+      setAssignTechnicianModal(null);
+      setAssignTechnicianId('');
+      // Reload requests
+      const data = await serviceRequestsAPI.getAll();
+      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+      setTimeout(() => setServiceRequestsSuccess(null), 3000);
+    } catch (err) {
+      setServiceRequestsError(err.message || 'Failed to assign technician');
+    }
+  };
+
+  const handleDeclineRequest = async (requestId) => {
+    try {
+      setServiceRequestsError(null);
+      setServiceRequestsSuccess(null);
+      await serviceRequestsAPI.decline(requestId);
+      setServiceRequestsSuccess('Request declined successfully!');
+      const data = await serviceRequestsAPI.getAll();
+      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+      setTimeout(() => setServiceRequestsSuccess(null), 3000);
+    } catch (err) {
+      setServiceRequestsError(err.message || 'Failed to decline request');
+    }
+  };
+
+  const handleCompleteRequest = async (requestId) => {
+    try {
+      setServiceRequestsError(null);
+      setServiceRequestsSuccess(null);
+      await serviceRequestsAPI.complete(requestId);
+      setServiceRequestsSuccess('Request marked as completed!');
+      const data = await serviceRequestsAPI.getAll();
+      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+      setTimeout(() => setServiceRequestsSuccess(null), 3000);
+    } catch (err) {
+      setServiceRequestsError(err.message || 'Failed to complete request');
+    }
+  };
+
+  const handleDeleteRequest = async (requestId) => {
+    try {
+      setServiceRequestsError(null);
+      setServiceRequestsSuccess(null);
+      await serviceRequestsAPI.delete(requestId);
+      setServiceRequestsSuccess('Request deleted successfully!');
+      const data = await serviceRequestsAPI.getAll();
+      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+      setTimeout(() => setServiceRequestsSuccess(null), 3000);
+    } catch (err) {
+      setServiceRequestsError(err.message || 'Failed to delete request');
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -232,6 +334,7 @@ const Services = () => {
   };
 
   // Filter data based on search term
+
   const filteredServices = services.filter((service) =>
     (service.service_name || service.name)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     service.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -245,6 +348,19 @@ const Services = () => {
     slot.id?.toString().includes(searchTerm) ||
     slot.slot_id?.toString().includes(searchTerm)
   );
+
+  const filteredServiceRequests = serviceRequests.filter((req) => {
+    const term = serviceRequestsSearch.toLowerCase();
+    return (
+      req.id?.toString().includes(term) ||
+      req.status?.toLowerCase().includes(term) ||
+      req.customer_name?.toLowerCase().includes(term) ||
+      req.technician_name?.toLowerCase().includes(term) ||
+      req.service_name?.toLowerCase().includes(term) ||
+      req.address?.toLowerCase().includes(term) ||
+      req.created_at?.toString().includes(term)
+    );
+  });
 
   if (loading) {
     return (
@@ -326,23 +442,209 @@ const Services = () => {
             >
               Time Slots ({slots.length})
             </button>
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${
+                activeTab === 'requests'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Service Requests
+            </button>
           </nav>
         </div>
       </div>
 
+
       {/* Search Bar */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder={`Search ${activeTab}...`}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+      {activeTab !== 'requests' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder={`Search ${activeTab}...`}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search service requests..."
+              value={serviceRequestsSearch}
+              onChange={(e) => setServiceRequestsSearch(e.target.value)}
+              className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+      )}
+      {/* Service Requests Table */}
+      {activeTab === 'requests' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {/* Filter by user or technician */}
+          <div className="flex items-center space-x-4 p-4">
+            <input
+              type="text"
+              placeholder="Filter by Customer/User ID"
+              value={serviceRequestsUserId}
+              onChange={handleServiceRequestsUserIdChange}
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <input
+              type="text"
+              placeholder="Filter by Technician ID"
+              value={serviceRequestsTechnicianId}
+              onChange={handleServiceRequestsTechnicianIdChange}
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          {serviceRequestsError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+              <p className="text-red-700 flex-1">{serviceRequestsError}</p>
+              <button onClick={() => setServiceRequestsError(null)} className="ml-auto">
+                <X className="w-4 h-4 text-red-600" />
+              </button>
+            </div>
+          )}
+          {serviceRequestsSuccess && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <p className="text-green-700">{serviceRequestsSuccess}</p>
+              <button onClick={() => setServiceRequestsSuccess(null)} className="ml-auto">
+                <X className="w-4 h-4 text-green-600" />
+              </button>
+            </div>
+          )}
+          {serviceRequestsLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : filteredServiceRequests.length > 0 ? (
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Request ID</th>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Customer/User ID</th>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Service ID</th>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Slot ID</th>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Technician ID</th>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Status</th>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Description</th>
+                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Request Date</th>
+                  <th className="text-right py-3 px-6 text-sm font-semibold text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredServiceRequests.map((req) => (
+                  <tr key={req.request_id} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                    <td className="py-4 px-6 text-gray-600">#{req.request_id}</td>
+                    <td className="py-4 px-6 text-gray-900 font-semibold">{req.user_Id || req.customer_id || 'N/A'}</td>
+                    <td className="py-4 px-6">{req.service_id || 'N/A'}</td>
+                    <td className="py-4 px-6">{req.slot_id || 'N/A'}</td>
+                    <td className="py-4 px-6">{req.technician_id || 'Unassigned'}</td>
+                    <td className="py-4 px-6">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        req.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        req.status === 'assigned' ? 'bg-blue-100 text-blue-800' :
+                        req.status === 'declined' ? 'bg-red-100 text-red-800' :
+                        req.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6">{req.description || 'N/A'}</td>
+                    <td className="py-4 px-6">{req.request_date ? req.request_date : 'N/A'}</td>
+                    <td className="py-4 px-6 text-right">
+                      <div className="flex items-center justify-end space-x-2">
+                        {req.status === 'pending' && (
+                          <button
+                            onClick={() => setAssignTechnicianModal(req)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            title="Assign Technician"
+                          >
+                            <Wrench className="w-4 h-4" />
+                          </button>
+                        )}
+                        {req.status === 'pending' && (
+                          <button
+                            onClick={() => handleDeclineRequest(req.request_id)}
+                            className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition"
+                            title="Decline"
+                          >
+                            <AlertCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        {req.status === 'assigned' && (
+                          <button
+                            onClick={() => handleCompleteRequest(req.request_id)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                            title="Mark Complete"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteRequest(req.request_id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="text-center py-12">
+              <Wrench className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No service requests found</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Assign Technician Modal */}
+      {assignTechnicianModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Assign Technician</h3>
+            <p className="text-gray-600 mb-6">Assign a technician to this service request.</p>
+            <input
+              type="text"
+              placeholder="Technician ID"
+              value={assignTechnicianId}
+              onChange={e => setAssignTechnicianId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+            />
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                onClick={() => setAssignTechnicianModal(null)}
+                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAssignTechnician(assignTechnicianModal.id, assignTechnicianId)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                disabled={!assignTechnicianId}
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Services Table */}
       {activeTab === 'services' && (
