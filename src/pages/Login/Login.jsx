@@ -20,7 +20,7 @@ const Login = () => {
   const validateForm = () => {
     const errors = {};
     if (!formData.identifier.trim()) {
-      errors.identifier = 'Email or username is required';
+      errors.identifier = 'Email is required';
     }
     if (!formData.password) {
       errors.password = 'Password is required';
@@ -79,10 +79,10 @@ const Login = () => {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email/Username Input */}
+            {/* Email Input */}
             <div>
               <label htmlFor="identifier" className="block text-sm font-semibold text-gray-700 mb-2">
-                Email or Username
+                Email
               </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -95,7 +95,7 @@ const Login = () => {
                   className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
                     validationErrors.identifier ? 'border-red-500' : 'border-gray-200'
                   }`}
-                  placeholder="Enter your email or username"
+                  placeholder="Enter your email"
                 />
               </div>
               {validationErrors.identifier && (

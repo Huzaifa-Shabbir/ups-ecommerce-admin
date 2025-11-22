@@ -30,19 +30,17 @@ const getAuthToken = () => {
   return t;
 };
 
-// Helper function for API requests (matching working frontend pattern)
+// Helper function for API requests (backend uses session cookies)
 const apiRequest = async (endpoint, options = {}) => {
-  const token = getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
-    credentials: 'include', // Important for cookies
+    credentials: 'include', // Important for session cookies
   });
 
   if (!response.ok) {

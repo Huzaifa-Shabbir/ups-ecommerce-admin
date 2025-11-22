@@ -15,20 +15,16 @@ export const AuthProvider = ({ children }) => {
 
   // Load saved credentials on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
     const savedUser = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
-    const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
 
-    if (savedToken && savedUser) {
+    if (savedUser) {
       try {
-        setToken(savedToken);
+        setToken('session'); // Set sentinel token for session-based auth
         setUser(JSON.parse(savedUser));
       } catch (err) {
         console.error('Error loading saved credentials:', err);
-        localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(REMEMBER_ME_KEY);
-        sessionStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(USER_KEY);
       }
     }
@@ -98,19 +94,13 @@ export const AuthProvider = ({ children }) => {
   setToken(authToken || 'session');
       setUser(normalizedUser);
 
-      // Only persist token if it's a non-null/non-undefined value. Some backends
-      // rely on session cookies instead of returning a token; avoid storing
-      // the literal 'null' which causes the frontend to send Authorization: Bearer null.
+      // Backend uses session cookies, persist user data only
       if (rememberMe) {
-        if (authToken) localStorage.setItem(TOKEN_KEY, authToken);
         localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
         localStorage.setItem(REMEMBER_ME_KEY, 'true');
-        sessionStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(USER_KEY);
       } else {
-        if (authToken) sessionStorage.setItem(TOKEN_KEY, authToken);
         sessionStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
-        localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(REMEMBER_ME_KEY);
       }
@@ -126,22 +116,14 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      await fetch(`${API_AUTH_BASE}/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (err) {
-      console.error('Logout error:', err);
-    } finally {
-      setToken(null);
-      setUser(null);
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
-      localStorage.removeItem(REMEMBER_ME_KEY);
-      sessionStorage.removeItem(TOKEN_KEY);
-      sessionStorage.removeItem(USER_KEY);
-    }
+    // Remove logout API call since backend doesn't have /logout route
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(REMEMBER_ME_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
   }, []);
 
   return (
