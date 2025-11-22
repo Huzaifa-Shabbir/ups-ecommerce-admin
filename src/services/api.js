@@ -263,10 +263,10 @@ export const dashboardAPI = {
       const ordersList = Array.isArray(orders) ? orders : (orders.orders || []);
       const paymentsList = Array.isArray(payments) ? payments : (payments.payments || []);
 
-      const totalRevenue = paymentsList.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      const totalRevenue = ordersList.reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0);
       const totalOrders = ordersList.length;
       const totalProducts = productsList.length;
-      
+
       // Get unique customers from orders (try different possible column names)
       const uniqueCustomers = new Set(
         ordersList

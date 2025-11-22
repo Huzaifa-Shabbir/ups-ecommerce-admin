@@ -87,19 +87,9 @@ const Dashboard = () => {
     }
   };
 
-  // Group payments and orders by month
+  // Group orders by month for revenue and orders count
   const revenueData = (() => {
     const revenueByMonth = {};
-    payments.forEach(payment => {
-      // Use payment.date or payment.created_at for payments, fallback if needed
-      const dateStr = payment.date || payment.created_at;
-      const date = new Date(dateStr);
-      if (isNaN(date)) return;
-      const month = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-      if (!revenueByMonth[month]) revenueByMonth[month] = { revenue: 0, orders: 0 };
-      // Use payment.amount for revenue
-      revenueByMonth[month].revenue += parseFloat(payment.amount) || 0;
-    });
     orders.forEach(order => {
       // Use order.order_date for orders
       const dateStr = order.order_date;
@@ -107,7 +97,8 @@ const Dashboard = () => {
       if (isNaN(date)) return;
       const month = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
       if (!revenueByMonth[month]) revenueByMonth[month] = { revenue: 0, orders: 0 };
-      // Use order.total_amount for revenue if needed, but only count orders for chart
+      // Use order.total_amount for revenue
+      revenueByMonth[month].revenue += parseFloat(order.total_amount) || 0;
       revenueByMonth[month].orders += 1;
     });
     // Sort months chronologically
@@ -145,7 +136,7 @@ const Dashboard = () => {
     },
     {
       title: 'Total Revenue',
-      value: `$${payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `$${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
       color: 'bg-yellow-500',
       link: '/admin/payments',
