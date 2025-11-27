@@ -35,9 +35,23 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [orders, setOrders] = useState([]);
+
+  // Add the same date parsing logic from Orders page
+  const getOrderDate = (order) => {
+    const dateVal = order?.order_date || order?.created_at || order?.order?.order_date || order?.orderDetail?.order?.order_date || order?.orderDetail?.order_date;
+    if (!dateVal) return null;
+    try {
+      return new Date(dateVal);
+    } catch (e) {
+      return null;
+    }
+  };
 
   useEffect(() => {
     loadDashboardData();
+    loadChartData();
   }, []);
 
   const loadDashboardData = async () => {
@@ -66,14 +80,6 @@ const Dashboard = () => {
     }
   };
 
-  const [payments, setPayments] = useState([]);
-  const [orders, setOrders] = useState([]);
-
-  useEffect(() => {
-    loadDashboardData();
-    loadChartData();
-  }, []);
-
   const loadChartData = async () => {
     try {
       const paymentsData = await paymentsAPI.getAll();
@@ -91,16 +97,18 @@ const Dashboard = () => {
   const revenueData = (() => {
     const revenueByMonth = {};
     orders.forEach(order => {
-      // Use order.order_date for orders
-      const dateStr = order.order_date;
-      const date = new Date(dateStr);
-      if (isNaN(date)) return;
-      const month = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      // Use the getOrderDate function to properly extract dates
+      const orderDate = getOrderDate(order);
+      if (!orderDate || isNaN(orderDate)) return;
+      
+      const month = orderDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
       if (!revenueByMonth[month]) revenueByMonth[month] = { revenue: 0, orders: 0 };
+      
       // Use order.total_amount for revenue
-      revenueByMonth[month].revenue += parseFloat(order.total_amount) || 0;
+      revenueByMonth[month].revenue += parseFloat(order.total_amount || order.amount || 0) || 0;
       revenueByMonth[month].orders += 1;
     });
+    
     // Sort months chronologically
     const sortedMonths = Object.keys(revenueByMonth).sort((a, b) => {
       const [aMonth, aYear] = a.split(' ');
@@ -109,8 +117,16 @@ const Dashboard = () => {
       const bDate = new Date(`${bMonth} 1, ${bYear}`);
       return aDate - bDate;
     });
+    
     return sortedMonths.map(month => ({ name: month, ...revenueByMonth[month] }));
   })();
+
+  // Process recent orders to ensure proper date handling
+  const processedRecentOrders = stats.recentOrders.map(order => ({
+    ...order,
+    // Ensure we have a proper date for display
+    displayDate: getOrderDate(order)
+  }));
 
   const statCards = [
     {
@@ -168,8 +184,8 @@ const Dashboard = () => {
         <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your store.</p>
       </div>
 
-  {/* Orders Summary (compact on dashboard to avoid duplicate KPIs) */}
-  <OrdersSummary compact />
+      {/* Orders Summary (compact on dashboard to avoid duplicate KPIs) */}
+      <OrdersSummary compact />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -215,7 +231,14 @@ const Dashboard = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis />
-              <Tooltip />
+              <Tooltip 
+                formatter={(value, name) => {
+                  if (name === 'Revenue ($)') {
+                    return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, name];
+                  }
+                  return [value, name];
+                }}
+              />
               <Legend />
               <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} name="Revenue ($)" />
             </LineChart>
@@ -260,7 +283,7 @@ const Dashboard = () => {
           </Link>
         </div>
 
-        {stats.recentOrders.length > 0 ? (
+        {processedRecentOrders.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -273,7 +296,7 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {stats.recentOrders.map((order) => (
+                {processedRecentOrders.map((order) => (
                   <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
                     <td className="py-3 px-4 text-sm text-gray-900">#{order.id || order.order_id}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">
@@ -296,8 +319,12 @@ const Dashboard = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
-                      {order.created_at
-                        ? new Date(order.created_at).toLocaleDateString()
+                      {order.displayDate
+                        ? order.displayDate.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })
                         : 'N/A'}
                     </td>
                   </tr>
@@ -317,5 +344,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-
-

@@ -12,6 +12,17 @@ const Customers = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [customerOrders, setCustomerOrders] = useState([]);
 
+  // Add the same date parsing logic from Orders page
+  const getOrderDate = (order) => {
+    const dateVal = order?.order_date || order?.created_at || order?.order?.order_date || order?.orderDetail?.order?.order_date || order?.orderDetail?.order_date;
+    if (!dateVal) return null;
+    try {
+      return new Date(dateVal);
+    } catch (e) {
+      return null;
+    }
+  };
+
   useEffect(() => {
     loadCustomers(customerFilter);
   }, []);
@@ -99,16 +110,16 @@ const Customers = () => {
         orders = [];
       }
 
-      setSelectedCustomer(customer);
-  const ordersList = Array.isArray(orders) ? orders : (orders.orders || []);
-  // Compute totals for selected customer
-  const totalOrders = ordersList.length;
-  const totalSpent = ordersList.reduce((sum, o) => sum + (parseFloat(o.total_amount || o.amount || 0) || 0), 0);
+      const ordersList = Array.isArray(orders) ? orders : (orders.orders || []);
+      
+      // Compute totals for selected customer
+      const totalOrders = ordersList.length;
+      const totalSpent = ordersList.reduce((sum, o) => sum + (parseFloat(o.total_amount || o.amount || 0) || 0), 0);
 
-  const customerWithTotals = { ...customer, totalOrders, totalSpent };
+      const customerWithTotals = { ...customer, totalOrders, totalSpent };
 
-  setSelectedCustomer(customerWithTotals);
-  setCustomerOrders(ordersList);
+      setSelectedCustomer(customerWithTotals);
+      setCustomerOrders(ordersList);
       setShowDetails(true);
       setError(null);
     } catch (err) {
@@ -385,9 +396,12 @@ const Customers = () => {
                           <tr key={order.id || order.order_id} className="border-b border-gray-100">
                             <td className="py-3 px-4">#{order.id || order.order_id}</td>
                             <td className="py-3 px-4">
-                              {order.created_at
-                                ? new Date(order.created_at).toLocaleDateString('en-US')
-                                : 'N/A'}
+                              {(() => {
+                                const orderDate = getOrderDate(order);
+                                return orderDate 
+                                  ? orderDate.toLocaleDateString('en-US')
+                                  : 'N/A';
+                              })()}
                             </td>
                             <td className="py-3 px-4">
                               <span
@@ -413,6 +427,27 @@ const Customers = () => {
                 ) : (
                   <p className="text-gray-600 text-center py-8">No orders found</p>
                 )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => handleDeactivateCustomer(selectedCustomer.id)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center space-x-2"
+                >
+                  <Trash className="w-4 h-4" />
+                  <span>Deactivate Customer</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDetails(false);
+                    setSelectedCustomer(null);
+                    setCustomerOrders([]);
+                  }}
+                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>

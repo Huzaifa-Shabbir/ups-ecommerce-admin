@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { paymentsAPI } from '../../services/api';
-import { CreditCard, Search, Filter, AlertCircle, CheckCircle, XCircle, Trash2, PlusCircle } from 'lucide-react';
+import { CreditCard, Search, Filter, AlertCircle, CheckCircle, XCircle, Trash2, PlusCircle, X, RefreshCw } from 'lucide-react';
 
 const Payments = () => {
   const [payments, setPayments] = useState([]);
@@ -15,6 +15,7 @@ const Payments = () => {
   const [createError, setCreateError] = useState(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [searchedOrder, setSearchedOrder] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, payment: null });
 
   useEffect(() => {
     loadPayments();
@@ -23,11 +24,12 @@ const Payments = () => {
   const loadPayments = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await paymentsAPI.getAll();
       setPayments(Array.isArray(data) ? data : (data.payments || []));
-      setError(null);
     } catch (err) {
-      setError(err.message);
+      console.error('Error loading payments:', err);
+      setError(err.message || 'Failed to fetch payments. Please check your API connection.');
       setPayments([]);
     } finally {
       setLoading(false);
@@ -38,6 +40,7 @@ const Payments = () => {
   const handleOrderIdSearch = async (e) => {
     e.preventDefault();
     if (!orderIdSearch) return;
+    
     setLoading(true);
     setError(null);
     try {
@@ -45,7 +48,8 @@ const Payments = () => {
       setPayments(Array.isArray(data) ? data : (data.payments || []));
       setSearchedOrder(true);
     } catch (err) {
-      setError(err.message);
+      console.error('Error searching payments by order:', err);
+      setError(err.message || `Failed to find payments for order #${orderIdSearch}`);
       setPayments([]);
       setSearchedOrder(true);
     } finally {
@@ -65,52 +69,75 @@ const Payments = () => {
     e.preventDefault();
     setCreateLoading(true);
     setCreateError(null);
+    
     try {
       if (!createData.order_id || !createData.payment_method || !createData.amount) {
-        setCreateError('order_id, payment_method, and amount required');
+        setCreateError('Order ID, payment method, and amount are required');
         setCreateLoading(false);
         return;
       }
+      
       await paymentsAPI.create({
         order_id: createData.order_id,
         payment_method: createData.payment_method,
-        amount: createData.amount,
+        amount: parseFloat(createData.amount),
       });
+      
       setShowCreate(false);
       setCreateData({ order_id: '', payment_method: '', amount: '' });
       loadPayments();
     } catch (err) {
-      setCreateError(err.message);
+      console.error('Error creating payment:', err);
+      setCreateError(err.message || 'Failed to create payment. Please check the details and try again.');
     } finally {
       setCreateLoading(false);
     }
   };
 
+  // Show delete confirmation
+  const showDeleteConfirmation = (payment) => {
+    setDeleteConfirm({ show: true, payment });
+  };
+
+  // Hide delete confirmation
+  const hideDeleteConfirmation = () => {
+    setDeleteConfirm({ show: false, payment: null });
+  };
+
   // Delete payment
-  const handleDeletePayment = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this payment?')) return;
+  const handleDeletePayment = async () => {
+    if (!deleteConfirm.payment) return;
+    
+    const paymentId = deleteConfirm.payment.id || deleteConfirm.payment.payment_id;
     setLoading(true);
     setError(null);
+    
     try {
-      await paymentsAPI.delete(id);
+      await paymentsAPI.delete(paymentId);
       // If searching by order, reload that, else reload all
       if (searchedOrder && orderIdSearch) {
         const data = await paymentsAPI.getByOrder(orderIdSearch);
         setPayments(Array.isArray(data) ? data : (data.payments || []));
       } else {
-        loadPayments();
+        await loadPayments();
       }
+      hideDeleteConfirmation();
     } catch (err) {
-      setError('Failed to delete payment: ' + err.message);
+      console.error('Error deleting payment:', err);
+      setError('Failed to delete payment: ' + (err.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
   };
 
   const filteredPayments = payments.filter((payment) => {
-    const matchesPaymentId = searchPaymentId ? (payment.id?.toString().includes(searchPaymentId) || payment.payment_id?.toString().includes(searchPaymentId)) : true;
-    const matchesOrderId = searchOrderId ? payment.order_id?.toString().includes(searchOrderId) : true;
-    const matchesMethod = searchMethod ? (payment.payment_method?.toLowerCase().includes(searchMethod.toLowerCase()) || payment.method?.toLowerCase().includes(searchMethod.toLowerCase())) : true;
+    const matchesPaymentId = searchPaymentId ? 
+      (payment.id?.toString().includes(searchPaymentId) || payment.payment_id?.toString().includes(searchPaymentId)) : true;
+    const matchesOrderId = searchOrderId ? 
+      payment.order_id?.toString().includes(searchOrderId) : true;
+    const matchesMethod = searchMethod ? 
+      (payment.payment_method?.toLowerCase().includes(searchMethod.toLowerCase()) || 
+       payment.method?.toLowerCase().includes(searchMethod.toLowerCase())) : true;
     return matchesPaymentId && matchesOrderId && matchesMethod;
   });
 
@@ -129,19 +156,37 @@ const Payments = () => {
           <h1 className="text-3xl font-bold text-gray-900">Manage Payments</h1>
           <p className="text-gray-600 mt-1">View and track all payment transactions</p>
         </div>
-        <button
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          onClick={() => setShowCreate((v) => !v)}
-        >
-          <PlusCircle className="w-5 h-5" />
-          <span>Add Payment</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={loadPayments}
+            className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            title="Refresh Payments"
+          >
+            <RefreshCw className="w-5 h-5" />
+            <span>Refresh</span>
+          </button>
+          <button
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            onClick={() => setShowCreate((v) => !v)}
+          >
+            <PlusCircle className="w-5 h-5" />
+            <span>Add Payment</span>
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
-          <AlertCircle className="w-5 h-5 text-red-600" />
-          <p className="text-red-700">Error: {error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <p className="text-red-700">{error}</p>
+          </div>
+          <button 
+            onClick={() => setError(null)}
+            className="text-red-600 hover:text-red-800"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       )}
 
@@ -191,19 +236,25 @@ const Payments = () => {
                 min="1"
                 value={createData.order_id}
                 onChange={(e) => setCreateData({ ...createData, order_id: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Payment Method</label>
-              <input
-                type="text"
+              <select
                 value={createData.payment_method}
                 onChange={(e) => setCreateData({ ...createData, payment_method: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
-              />
+              >
+                <option value="">Select Method</option>
+                <option value="credit_card">Credit Card</option>
+                <option value="debit_card">Debit Card</option>
+                <option value="paypal">PayPal</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cash">Cash</option>
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Amount</label>
@@ -213,20 +264,20 @@ const Payments = () => {
                 step="0.01"
                 value={createData.amount}
                 onChange={(e) => setCreateData({ ...createData, amount: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
               />
             </div>
             {createError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-red-700 flex items-center space-x-2">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 flex items-center space-x-2">
                 <AlertCircle className="w-4 h-4" />
-                <span>{createError}</span>
+                <span className="text-sm">{createError}</span>
               </div>
             )}
             <div className="flex items-center space-x-3">
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
                 disabled={createLoading}
               >
                 {createLoading ? 'Creating...' : 'Create Payment'}
@@ -235,7 +286,9 @@ const Payments = () => {
                 type="button"
                 className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
                 onClick={() => setShowCreate(false)}
-              >Cancel</button>
+              >
+                Cancel
+              </button>
             </div>
           </form>
         </div>
@@ -245,10 +298,11 @@ const Payments = () => {
       {searchedOrder && (
         <div className="mb-4">
           <button
-            className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
+            className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition flex items-center space-x-2"
             onClick={handleBackToAllPayments}
           >
-            Back to All Payments
+            <X className="w-4 h-4" />
+            <span>Back to All Payments</span>
           </button>
         </div>
       )}
@@ -287,7 +341,10 @@ const Payments = () => {
                           <span className="text-green-800 font-semibold">Paid</span>
                         </>
                       ) : (
-                        <span className="text-yellow-800 font-semibold">Pending</span>
+                        <>
+                          <XCircle className="w-4 h-4 text-yellow-600" />
+                          <span className="text-yellow-800 font-semibold">Pending</span>
+                        </>
                       )}
                     </div>
                   </td>
@@ -300,11 +357,11 @@ const Payments = () => {
                   </td>
                   <td className="py-4 px-6">
                     <button
-                      className="text-red-600 hover:text-red-800 flex items-center space-x-1"
+                      className="text-red-600 hover:text-red-800 flex items-center space-x-1 transition"
                       title="Delete Payment"
-                      onClick={() => handleDeletePayment(payment.id || payment.payment_id)}
+                      onClick={() => showDeleteConfirmation(payment)}
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-4 h-4" />
                       <span>Delete</span>
                     </button>
                   </td>
@@ -316,13 +373,87 @@ const Payments = () => {
           <div className="text-center py-12">
             <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">No payments found</p>
+            {payments.length === 0 && !loading && (
+              <button
+                onClick={loadPayments}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                Try Again
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.show && deleteConfirm.payment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Confirm Deletion</h3>
+              <button
+                onClick={hideDeleteConfirmation}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center space-x-2 text-red-800">
+                  <AlertCircle className="w-5 h-5" />
+                  <span className="font-semibold">Warning: This action cannot be undone</span>
+                </div>
+              </div>
+              
+              <p className="text-gray-700 mb-2">
+                Are you sure you want to delete this payment?
+              </p>
+              
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="text-gray-600">Payment ID:</div>
+                  <div className="font-semibold">#{deleteConfirm.payment.id || deleteConfirm.payment.payment_id}</div>
+                  
+                  <div className="text-gray-600">Order ID:</div>
+                  <div className="font-semibold">#{deleteConfirm.payment.order_id || 'N/A'}</div>
+                  
+                  <div className="text-gray-600">Amount:</div>
+                  <div className="font-semibold">
+                    ${parseFloat(deleteConfirm.payment.amount || 0).toFixed(2)}
+                  </div>
+                  
+                  <div className="text-gray-600">Method:</div>
+                  <div className="font-semibold capitalize">
+                    {deleteConfirm.payment.payment_method || deleteConfirm.payment.method || 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                onClick={hideDeleteConfirmation}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeletePayment}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center space-x-2 disabled:opacity-50"
+                disabled={loading}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{loading ? 'Deleting...' : 'Delete Payment'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default Payments;
-
-
