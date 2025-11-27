@@ -15,6 +15,26 @@ const Login = ({ role = 'admin' }) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+
+  // Load saved credentials on mount if remember me was checked
+  useEffect(() => {
+    const REMEMBER_ME_KEY = isTechnicianPortal ? 'technicianRememberMe' : 'adminRememberMe';
+    const USER_KEY = isTechnicianPortal ? 'technicianUser' : 'adminUser';
+    
+    const wasRemembered = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
+    if (wasRemembered) {
+      const savedUser = localStorage.getItem(USER_KEY);
+      if (savedUser) {
+        try {
+          const user = JSON.parse(savedUser);
+          setFormData(prev => ({ ...prev, identifier: user.email || '' }));
+          setRememberMe(true);
+        } catch (err) {
+          console.error('Error loading saved credentials:', err);
+        }
+      }
+    }
+  }, [isTechnicianPortal]);
   const [heading, subheading] = isTechnicianPortal
     ? ['Technician Login', 'Access your technician dashboard and assigned jobs']
     : ['Admin Login', 'Enter your credentials to access the admin dashboard'];

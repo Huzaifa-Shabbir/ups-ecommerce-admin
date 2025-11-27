@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import ChangePassword from '../ChangePassword/ChangePassword';
 import {
   LayoutDashboard,
   Package,
@@ -17,11 +18,13 @@ import {
   ChevronRight,
   BookOpen,
   UserCog,
+  Key,
 } from 'lucide-react';
 
 const AdminLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -124,13 +127,22 @@ const AdminLayout = ({ children }) => {
                 <p className="text-xs text-gray-500">Administrator</p>
               </div>
             )}
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition"
-            >
-              <LogOut className="w-5 h-5" />
-              {sidebarOpen && <span>Logout</span>}
-            </button>
+            <div className="space-y-1">
+              <button
+                onClick={() => setShowChangePassword(true)}
+                className="w-full flex items-center space-x-3 px-4 py-3 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+              >
+                <Key className="w-5 h-5" />
+                {sidebarOpen && <span>Change Password</span>}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition"
+              >
+                <LogOut className="w-5 h-5" />
+                {sidebarOpen && <span>Logout</span>}
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -159,6 +171,11 @@ const AdminLayout = ({ children }) => {
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
       </div>
+
+      {/* Change Password Modal */}
+      {showChangePassword && user && (
+        <ChangePassword onClose={() => setShowChangePassword(false)} user={user} />
+      )}
     </div>
   );
 };

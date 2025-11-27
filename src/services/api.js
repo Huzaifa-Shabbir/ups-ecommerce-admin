@@ -91,6 +91,18 @@ export const authAPI = {
       body: JSON.stringify({ identifier, password }),
     });
   },
+  changePassword: async (email, oldPassword, newPassword) => {
+    return apiRequest('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, oldPassword, newPassword }),
+    });
+  },
+  resetPassword: async (email, newPassword) => {
+    return apiRequest('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, new_password: newPassword }),
+    });
+  },
 };
 
 // Products API

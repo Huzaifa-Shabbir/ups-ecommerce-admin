@@ -84,6 +84,8 @@ export const TechnicianAuthProvider = ({ children }) => {
         name: userData.name || userData.full_name || userData.username,
       };
 
+      // Normalize response: token may not be provided; backend may rely on session cookies
+      const authToken = data.token || data.accessToken || null;
       setToken(authToken || 'session');
       setUser(normalizedUser);
 
