@@ -15,6 +15,8 @@ import {
   X,
   LogOut,
   ChevronRight,
+  BookOpen,
+  UserCog,
 } from 'lucide-react';
 
 const AdminLayout = ({ children }) => {
@@ -31,6 +33,8 @@ const AdminLayout = ({ children }) => {
     { path: '/admin/orders', label: 'Manage Orders', icon: ShoppingCart },
     { path: '/admin/customers', label: 'Manage Customers', icon: Users },
     { path: '/admin/services', label: 'Manage Services', icon: Wrench },
+    { path: '/admin/technicians', label: 'Manage Technicians', icon: UserCog },
+    { path: '/admin/resources', label: 'Knowledge Resources', icon: BookOpen },
     { path: '/admin/feedback', label: 'Manage Feedback', icon: MessageSquare },
     { path: '/admin/payments', label: 'Manage Payments', icon: CreditCard },
     { path: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3 },

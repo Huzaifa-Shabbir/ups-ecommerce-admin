@@ -135,8 +135,6 @@ const Orders = () => {
         return 'bg-yellow-100 text-yellow-800';
       case 'cancelled':
         return 'bg-red-100 text-red-800';
-      case 'processing':
-        return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -236,7 +234,6 @@ const Orders = () => {
           >
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
@@ -456,7 +453,6 @@ const Orders = () => {
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
                   <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
                 </select>

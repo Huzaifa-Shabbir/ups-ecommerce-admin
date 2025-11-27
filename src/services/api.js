@@ -19,6 +19,23 @@ export const serviceRequestsAPI = {
   decline: (id) => apiRequest(`/service-requests/${id}/decline`, { method: 'PATCH' }),
   complete: (id) => apiRequest(`/service-requests/${id}/complete`, { method: 'PATCH' }),
 };
+export const resourcesAPI = {
+  getAll: async () => {
+    const data = await apiRequest('/resources/all');
+    return Array.isArray(data) ? data : data.resources || data.data || [];
+  },
+  getForCustomers: async () => {
+    const data = await apiRequest('/resources/customers');
+    return Array.isArray(data) ? data : data.resources || data.data || [];
+  },
+  getForTechnicians: async () => {
+    const data = await apiRequest('/resources/technicians');
+    return Array.isArray(data) ? data : data.resources || data.data || [];
+  },
+  create: (payload) => apiRequest('/resources', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => apiRequest(`/resources/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  delete: (id) => apiRequest(`/resources/${id}`, { method: 'DELETE' }),
+};
 const API_BASE_URL = "http://localhost:4000/api";
 
 
@@ -239,6 +256,30 @@ export const feedbackAPI = {
   },
   create: (data) => apiRequest('/feedback', { method: 'POST', body: JSON.stringify(data) }),
   delete: (id) => apiRequest(`/feedback/${id}`, { method: 'DELETE' }),
+};
+
+export const techniciansAPI = {
+  getAll: async () => {
+    const data = await apiRequest('/technician');
+    return Array.isArray(data) ? data : data.technicians || data.data || [];
+  },
+  getActive: async () => {
+    const data = await apiRequest('/technician/active');
+    return Array.isArray(data) ? data : data.technicians || data.data || [];
+  },
+  getActiveById: async (id) => {
+    const data = await apiRequest(`/technician/active/${id}`);
+    return data.technician || data;
+  },
+  register: (payload) =>
+    apiRequest('/technician/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deactivate: (userId) =>
+    apiRequest(`/technician/${userId}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Dashboard Stats API (aggregate data)

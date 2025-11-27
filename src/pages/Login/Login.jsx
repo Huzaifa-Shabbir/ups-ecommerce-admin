@@ -1,21 +1,37 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Mail, Lock, Eye, EyeOff, Shield, AlertCircle } from 'lucide-react';
+import { useTechnicianAuth } from '../../context/TechnicianAuthContext';
+import { Mail, Lock, Eye, EyeOff, Shield, AlertCircle, UserCog } from 'lucide-react';
 
-const Login = () => {
+const Login = ({ role = 'admin' }) => {
   const navigate = useNavigate();
-  const { login, isLoading, error, clearError, user, token } = useAuth();
+  const adminAuth = useAuth();
+  const technicianAuth = useTechnicianAuth();
+  const isTechnicianPortal = role === 'technician';
+  const activeAuth = isTechnicianPortal ? technicianAuth : adminAuth;
+  const { login, isLoading, error, clearError, user, token } = activeAuth;
   const [formData, setFormData] = useState({ identifier: '', password: '' });
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+  const [heading, subheading] = isTechnicianPortal
+    ? ['Technician Login', 'Access your technician dashboard and assigned jobs']
+    : ['Admin Login', 'Enter your credentials to access the admin dashboard'];
+  const identifierLabel = 'Email';
+  const identifierPlaceholder = 'Enter your email';
 
   useEffect(() => {
-    if (user && token) {
+    if (adminAuth.user && adminAuth.token) {
       navigate('/admin/dashboard');
     }
-  }, [user, token, navigate]);
+  }, [adminAuth.user, adminAuth.token, navigate]);
+
+  useEffect(() => {
+    if (technicianAuth.user && technicianAuth.token) {
+      navigate('/technician/dashboard');
+    }
+  }, [technicianAuth.user, technicianAuth.token, navigate]);
 
   const validateForm = () => {
     const errors = {};
@@ -63,10 +79,10 @@ const Login = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mb-4">
-              <Shield className="w-8 h-8 text-white" />
+              {isTechnicianPortal ? <UserCog className="w-8 h-8 text-white" /> : <Shield className="w-8 h-8 text-white" />}
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Login</h1>
-            <p className="text-gray-600">Enter your credentials to access the admin dashboard</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{heading}</h1>
+            <p className="text-gray-600">{subheading}</p>
           </div>
 
           {/* Error Message */}
@@ -82,7 +98,7 @@ const Login = () => {
             {/* Email Input */}
             <div>
               <label htmlFor="identifier" className="block text-sm font-semibold text-gray-700 mb-2">
-                Email
+                {identifierLabel}
               </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -95,7 +111,7 @@ const Login = () => {
                   className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
                     validationErrors.identifier ? 'border-red-500' : 'border-gray-200'
                   }`}
-                  placeholder="Enter your email"
+                  placeholder={identifierPlaceholder}
                 />
               </div>
               {validationErrors.identifier && (
@@ -166,7 +182,9 @@ const Login = () => {
           <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-xs text-blue-800 text-center">
               <Shield className="w-4 h-4 inline mr-1" />
-              This is a secure admin area. Unauthorized access is prohibited.
+              {isTechnicianPortal
+                ? 'This portal is restricted to verified technicians.'
+                : 'This is a secure admin area. Unauthorized access is prohibited.'}
             </p>
           </div>
         </div>

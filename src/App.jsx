@@ -1,7 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { TechnicianAuthProvider } from './context/TechnicianAuthContext';
 import AdminLayout from './components/Layout/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import TechnicianProtectedRoute from './components/TechnicianProtectedRoute';
 import Login from './pages/Login/Login';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Products from './pages/Products/Products';
@@ -12,13 +14,20 @@ import Services from './pages/Services/Services';
 import Feedback from './pages/Feedback/Feedback';
 import Payments from './pages/Payments/Payments';
 import Reports from './pages/Reports/Reports';
+import Resources from './pages/Resources/Resources';
+import Technicians from './pages/Technicians/Technicians';
+import TechnicianLayout from './components/Layout/TechnicianLayout';
+import TechnicianDashboard from './pages/Technician/Dashboard';
+import TechnicianResourceCenter from './pages/Technician/ResourceCenter';
 
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/admin/login" element={<Login />} />
+      <TechnicianAuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/admin/login" element={<Login role="admin" />} />
+            <Route path="/technician/login" element={<Login role="technician" />} />
           <Route
             path="/admin"
             element={
@@ -45,6 +54,16 @@ function App() {
               <ProtectedRoute>
                 <AdminLayout>
                   <Products />
+                </AdminLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/resources"
+            element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Resources />
                 </AdminLayout>
               </ProtectedRoute>
             }
@@ -90,6 +109,16 @@ function App() {
             }
           />
           <Route
+            path="/admin/technicians"
+            element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Technicians />
+                </AdminLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/feedback"
             element={
               <ProtectedRoute>
@@ -119,9 +148,34 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/" element={<Navigate to="/admin/login" replace />} />
+            <Route
+              path="/technician"
+              element={<Navigate to="/technician/dashboard" replace />}
+            />
+            <Route
+              path="/technician/dashboard"
+              element={
+                <TechnicianProtectedRoute>
+                  <TechnicianLayout>
+                    <TechnicianDashboard />
+                  </TechnicianLayout>
+                </TechnicianProtectedRoute>
+              }
+            />
+            <Route
+              path="/technician/resources"
+              element={
+                <TechnicianProtectedRoute>
+                  <TechnicianLayout>
+                    <TechnicianResourceCenter />
+                  </TechnicianLayout>
+                </TechnicianProtectedRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/admin/login" replace />} />
         </Routes>
       </Router>
+      </TechnicianAuthProvider>
     </AuthProvider>
   );
 }
