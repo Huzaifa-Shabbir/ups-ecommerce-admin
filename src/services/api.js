@@ -288,6 +288,11 @@ export const techniciansAPI = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  update: (userId, payload) =>
+    apiRequest(`/technician/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
   deactivate: (userId) =>
     apiRequest(`/technician/${userId}`, {
       method: 'DELETE',
