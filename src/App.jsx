@@ -26,8 +26,8 @@ function App() {
       <TechnicianAuthProvider>
         <Router>
           <Routes>
-            <Route path="/admin/login" element={<Login role="admin" />} />
-            <Route path="/technician/login" element={<Login role="technician" />} />
+            <Route path="/admin/login" element={<Login />} />
+            <Route path="/technician/login" element={<Login />} />
           <Route
             path="/admin"
             element={
