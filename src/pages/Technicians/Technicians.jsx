@@ -13,6 +13,7 @@ import {
   Shield,
   Trash2,
   Loader2,
+  Edit,
 } from 'lucide-react';
 
 const initialForm = {
@@ -33,6 +34,8 @@ const Technicians = () => {
   const [formData, setFormData] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editingTechnician, setEditingTechnician] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
     fetchTechnicians();
@@ -67,10 +70,54 @@ const Technicians = () => {
       setSuccess('Technician created successfully.');
       setShowModal(false);
       setFormData(initialForm);
+      setIsEditMode(false);
+      setEditingTechnician(null);
       fetchTechnicians();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.message || 'Failed to create technician');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (tech) => {
+    setEditingTechnician(tech);
+    setIsEditMode(true);
+    setFormData({
+      name: tech.name || '',
+      email: tech.email || '',
+      username: tech.username || '',
+      password: '', // Don't pre-fill password
+      phone_Number: tech.phone_Number || '',
+    });
+    setShowModal(true);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (!editingTechnician) return;
+    
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const userId = editingTechnician.user_Id || editingTechnician.user_id;
+      // Only send fields that are being updated (exclude empty password)
+      const updateData = { ...formData };
+      if (!updateData.password) {
+        delete updateData.password;
+      }
+      await techniciansAPI.update(userId, updateData);
+      setSuccess('Technician updated successfully.');
+      setShowModal(false);
+      setFormData(initialForm);
+      setIsEditMode(false);
+      setEditingTechnician(null);
+      fetchTechnicians();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message || 'Failed to update technician');
     } finally {
       setSubmitting(false);
     }
@@ -123,6 +170,8 @@ const Technicians = () => {
         <button
           onClick={() => {
             setFormData(initialForm);
+            setIsEditMode(false);
+            setEditingTechnician(null);
             setShowModal(true);
           }}
           className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -221,13 +270,24 @@ const Technicians = () => {
                     </span>
                   </td>
                   <td className="py-4 px-6 text-right">
-                    <button
-                      onClick={() => setDeleteTarget(tech)}
-                      className="inline-flex items-center space-x-1 text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Delete</span>
-                    </button>
+                    <div className="flex items-center justify-end space-x-2">
+                      {tech.is_active && (
+                        <button
+                          onClick={() => handleEdit(tech)}
+                          className="inline-flex items-center space-x-1 text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg transition"
+                        >
+                          <Edit className="w-4 h-4" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDeleteTarget(tech)}
+                        className="inline-flex items-center space-x-1 text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -241,14 +301,28 @@ const Technicians = () => {
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Add Technician</h2>
-                <p className="text-sm text-gray-500 mt-1">Create credentials for a new technician account.</p>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {isEditMode ? 'Edit Technician' : 'Add Technician'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {isEditMode 
+                    ? 'Update technician information. Leave password blank to keep current password.' 
+                    : 'Create credentials for a new technician account.'}
+                </p>
               </div>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button 
+                onClick={() => {
+                  setShowModal(false);
+                  setFormData(initialForm);
+                  setIsEditMode(false);
+                  setEditingTechnician(null);
+                }} 
+                className="text-gray-400 hover:text-gray-600"
+              >
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
+            <form onSubmit={isEditMode ? handleUpdate : handleCreate} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
@@ -299,18 +373,22 @@ const Technicians = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Temporary Password *</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  {isEditMode ? 'New Password (leave blank to keep current)' : 'Temporary Password *'}
+                </label>
                 <input
                   type="text"
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  required
+                  required={!isEditMode}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Strong password"
+                  placeholder={isEditMode ? "Enter new password or leave blank" : "Strong password"}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Share this password with the technician. They can change it after logging in.
+                  {isEditMode 
+                    ? 'Only enter a password if you want to change it. Leave blank to keep the current password.'
+                    : 'Share this password with the technician. They can change it after logging in.'}
                 </p>
               </div>
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
@@ -333,8 +411,17 @@ const Technicians = () => {
                     </>
                   ) : (
                     <>
-                      <UserPlus className="w-4 h-4" />
-                      <span>Create Technician</span>
+                      {isEditMode ? (
+                        <>
+                          <Edit className="w-4 h-4" />
+                          <span>Update Technician</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4" />
+                          <span>Create Technician</span>
+                        </>
+                      )}
                     </>
                   )}
                 </button>
