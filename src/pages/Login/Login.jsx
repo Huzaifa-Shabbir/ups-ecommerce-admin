@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTechnicianAuth } from '../../context/TechnicianAuthContext';
-import { Mail, Lock, Eye, EyeOff, Shield, AlertCircle, UserCog } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, AlertCircle, UserCog, RotateCcw } from 'lucide-react';
 
-const Login = ({ role = 'admin' }) => {
+const Login = () => {
   const navigate = useNavigate();
   const adminAuth = useAuth();
   const technicianAuth = useTechnicianAuth();
-  const isTechnicianPortal = role === 'technician';
-  const activeAuth = isTechnicianPortal ? technicianAuth : adminAuth;
+  const [isTechnicianMode, setIsTechnicianMode] = useState(false);
+  const [isFlipping, setIsFlipping] = useState(false);
+  
+  const activeAuth = isTechnicianMode ? technicianAuth : adminAuth;
   const { login, isLoading, error, clearError, user, token } = activeAuth;
   const [formData, setFormData] = useState({ identifier: '', password: '' });
   const [rememberMe, setRememberMe] = useState(false);
@@ -18,8 +20,8 @@ const Login = ({ role = 'admin' }) => {
 
   // Load saved credentials on mount if remember me was checked
   useEffect(() => {
-    const REMEMBER_ME_KEY = isTechnicianPortal ? 'technicianRememberMe' : 'adminRememberMe';
-    const USER_KEY = isTechnicianPortal ? 'technicianUser' : 'adminUser';
+    const REMEMBER_ME_KEY = isTechnicianMode ? 'technicianRememberMe' : 'adminRememberMe';
+    const USER_KEY = isTechnicianMode ? 'technicianUser' : 'adminUser';
     
     const wasRemembered = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
     if (wasRemembered) {
@@ -34,8 +36,9 @@ const Login = ({ role = 'admin' }) => {
         }
       }
     }
-  }, [isTechnicianPortal]);
-  const [heading, subheading] = isTechnicianPortal
+  }, [isTechnicianMode]);
+
+  const [heading, subheading] = isTechnicianMode
     ? ['Technician Login', 'Access your technician dashboard and assigned jobs']
     : ['Admin Login', 'Enter your credentials to access the admin dashboard'];
   const identifierLabel = 'Email';
@@ -52,6 +55,21 @@ const Login = ({ role = 'admin' }) => {
       navigate('/technician/dashboard');
     }
   }, [technicianAuth.user, technicianAuth.token, navigate]);
+
+  const handleSwitch = () => {
+    setIsFlipping(true);
+    // Clear form data and errors when switching
+    setFormData({ identifier: '', password: '' });
+    setValidationErrors({});
+    // Clear errors from both contexts
+    adminAuth.clearError();
+    technicianAuth.clearError();
+    
+    setTimeout(() => {
+      setIsTechnicianMode(!isTechnicianMode);
+      setIsFlipping(false);
+    }, 300); // Half of the animation duration
+  };
 
   const validateForm = () => {
     const errors = {};
@@ -94,119 +112,261 @@ const Login = ({ role = 'admin' }) => {
         <div className="absolute -bottom-8 left-20 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-4000"></div>
       </div>
 
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
-        <div className="p-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mb-4">
-              {isTechnicianPortal ? <UserCog className="w-8 h-8 text-white" /> : <Shield className="w-8 h-8 text-white" />}
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{heading}</h1>
-            <p className="text-gray-600">{subheading}</p>
-          </div>
+      <div className="relative w-full max-w-md">
+        {/* Flip Card Container */}
+        <div className="perspective-1000">
+          <div 
+            className={`flip-card preserve-3d ${isTechnicianMode ? 'flipped' : ''}`}
+            style={{ minHeight: '600px' }}
+          >
+            {/* Admin Card (Front) */}
+            <div className="flip-card-front backface-hidden w-full">
+              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                <div className="p-8">
+                  {/* Header */}
+                  <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mb-4">
+                      <Shield className="w-8 h-8 text-white" />
+                    </div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Login</h1>
+                    <p className="text-gray-600">Enter your credentials to access the admin dashboard</p>
+                  </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-start space-x-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-red-700 text-sm font-medium">{error}</p>
-            </div>
-          )}
+                  {/* Error Message */}
+                  {error && !isTechnicianMode && (
+                    <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-start space-x-3">
+                      <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-red-700 text-sm font-medium">{error}</p>
+                    </div>
+                  )}
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Input */}
-            <div>
-              <label htmlFor="identifier" className="block text-sm font-semibold text-gray-700 mb-2">
-                {identifierLabel}
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  id="identifier"
-                  type="text"
-                  name="identifier"
-                  value={formData.identifier}
-                  onChange={handleChange}
-                  className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
-                    validationErrors.identifier ? 'border-red-500' : 'border-gray-200'
-                  }`}
-                  placeholder={identifierPlaceholder}
-                />
+                  {/* Login Form */}
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                      {/* Email Input */}
+                      <div>
+                        <label htmlFor="admin-identifier" className="block text-sm font-semibold text-gray-700 mb-2">
+                          {identifierLabel}
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                          <input
+                            id="admin-identifier"
+                            type="text"
+                            name="identifier"
+                            value={formData.identifier}
+                            onChange={handleChange}
+                            className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
+                              validationErrors.identifier ? 'border-red-500' : 'border-gray-200'
+                            }`}
+                            placeholder={identifierPlaceholder}
+                          />
+                        </div>
+                        {validationErrors.identifier && (
+                          <p className="mt-2 text-sm text-red-600">{validationErrors.identifier}</p>
+                        )}
+                      </div>
+
+                      {/* Password Input */}
+                      <div>
+                        <label htmlFor="admin-password" className="block text-sm font-semibold text-gray-700 mb-2">
+                          Password
+                        </label>
+                        <div className="relative">
+                          <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                          <input
+                            id="admin-password"
+                            type={showPassword ? 'text' : 'password'}
+                            name="password"
+                            value={formData.password}
+                            onChange={handleChange}
+                            className={`w-full pl-12 pr-12 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
+                              validationErrors.password ? 'border-red-500' : 'border-gray-200'
+                            }`}
+                            placeholder="Enter your password"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                          >
+                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          </button>
+                        </div>
+                        {validationErrors.password && (
+                          <p className="mt-2 text-sm text-red-600">{validationErrors.password}</p>
+                        )}
+                      </div>
+
+                      {/* Remember Me */}
+                      <div className="flex items-center">
+                        <input
+                          id="admin-rememberMe"
+                          type="checkbox"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="admin-rememberMe" className="ml-2 text-sm text-gray-700 cursor-pointer">
+                          Remember me
+                        </label>
+                      </div>
+
+                      {/* Submit Button */}
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-300 transition transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                      >
+                        {isLoading ? (
+                          <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <span>Sign In</span>
+                        )}
+                      </button>
+                    </form>
+
+                  {/* Security Notice */}
+                  <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs text-blue-800 text-center">
+                      <Shield className="w-4 h-4 inline mr-1" />
+                      This is a secure admin area. Unauthorized access is prohibited.
+                    </p>
+                  </div>
+                </div>
               </div>
-              {validationErrors.identifier && (
-                <p className="mt-2 text-sm text-red-600">{validationErrors.identifier}</p>
-              )}
             </div>
 
-            {/* Password Input */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={`w-full pl-12 pr-12 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
-                    validationErrors.password ? 'border-red-500' : 'border-gray-200'
-                  }`}
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
+            {/* Technician Card (Back) */}
+            <div className="flip-card-back backface-hidden w-full">
+              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                <div className="p-8">
+                  {/* Header */}
+                  <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl mb-4">
+                      <UserCog className="w-8 h-8 text-white" />
+                    </div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Technician Login</h1>
+                    <p className="text-gray-600">Access your technician dashboard and assigned jobs</p>
+                  </div>
+
+                  {/* Error Message */}
+                  {error && isTechnicianMode && (
+                    <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-start space-x-3">
+                      <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-red-700 text-sm font-medium">{error}</p>
+                    </div>
+                  )}
+
+                  {/* Login Form */}
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                      {/* Email Input */}
+                      <div>
+                        <label htmlFor="tech-identifier" className="block text-sm font-semibold text-gray-700 mb-2">
+                          {identifierLabel}
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                          <input
+                            id="tech-identifier"
+                            type="text"
+                            name="identifier"
+                            value={formData.identifier}
+                            onChange={handleChange}
+                            className={`w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition ${
+                              validationErrors.identifier ? 'border-red-500' : 'border-gray-200'
+                            }`}
+                            placeholder={identifierPlaceholder}
+                          />
+                        </div>
+                        {validationErrors.identifier && (
+                          <p className="mt-2 text-sm text-red-600">{validationErrors.identifier}</p>
+                        )}
+                      </div>
+
+                      {/* Password Input */}
+                      <div>
+                        <label htmlFor="tech-password" className="block text-sm font-semibold text-gray-700 mb-2">
+                          Password
+                        </label>
+                        <div className="relative">
+                          <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                          <input
+                            id="tech-password"
+                            type={showPassword ? 'text' : 'password'}
+                            name="password"
+                            value={formData.password}
+                            onChange={handleChange}
+                            className={`w-full pl-12 pr-12 py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition ${
+                              validationErrors.password ? 'border-red-500' : 'border-gray-200'
+                            }`}
+                            placeholder="Enter your password"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                          >
+                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          </button>
+                        </div>
+                        {validationErrors.password && (
+                          <p className="mt-2 text-sm text-red-600">{validationErrors.password}</p>
+                        )}
+                      </div>
+
+                      {/* Remember Me */}
+                      <div className="flex items-center">
+                        <input
+                          id="tech-rememberMe"
+                          type="checkbox"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        />
+                        <label htmlFor="tech-rememberMe" className="ml-2 text-sm text-gray-700 cursor-pointer">
+                          Remember me
+                        </label>
+                      </div>
+
+                      {/* Submit Button */}
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3.5 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 focus:ring-4 focus:ring-purple-300 transition transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                      >
+                        {isLoading ? (
+                          <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <span>Sign In</span>
+                        )}
+                      </button>
+                    </form>
+
+                  {/* Security Notice */}
+                  <div className="mt-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <p className="text-xs text-purple-800 text-center">
+                      <Shield className="w-4 h-4 inline mr-1" />
+                      This portal is restricted to verified technicians.
+                    </p>
+                  </div>
+                </div>
               </div>
-              {validationErrors.password && (
-                <p className="mt-2 text-sm text-red-600">{validationErrors.password}</p>
-              )}
             </div>
-
-            {/* Remember Me */}
-            <div className="flex items-center">
-              <input
-                id="rememberMe"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-700 cursor-pointer">
-                Remember me
-              </label>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-300 transition transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {isLoading ? (
-                <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <span>Sign In</span>
-              )}
-            </button>
-          </form>
-
-          {/* Security Notice */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs text-blue-800 text-center">
-              <Shield className="w-4 h-4 inline mr-1" />
-              {isTechnicianPortal
-                ? 'This portal is restricted to verified technicians.'
-                : 'This is a secure admin area. Unauthorized access is prohibited.'}
-            </p>
           </div>
+        </div>
+
+        {/* Switch Button */}
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={handleSwitch}
+            className="flex items-center space-x-2 px-6 py-3 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 border-2 border-gray-200 hover:border-blue-500"
+            disabled={isFlipping}
+          >
+            <RotateCcw className={`w-5 h-5 text-gray-600 transition-transform duration-300 ${isFlipping ? 'rotate-180' : ''}`} />
+            <span className="font-semibold text-gray-700">
+              Switch to {isTechnicianMode ? 'Admin' : 'Technician'} Login
+            </span>
+          </button>
         </div>
       </div>
     </div>
