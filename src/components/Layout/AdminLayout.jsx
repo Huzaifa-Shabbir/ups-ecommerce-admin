@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import ChangePassword from '../ChangePassword/ChangePassword';
 import {
   LayoutDashboard,
@@ -19,6 +20,8 @@ import {
   BookOpen,
   UserCog,
   Key,
+  Moon,
+  Sun,
 } from 'lucide-react';
 
 const AdminLayout = ({ children }) => {
@@ -28,6 +31,7 @@ const AdminLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
 
   const menuItems = [
     { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -51,11 +55,15 @@ const AdminLayout = ({ children }) => {
   const isActive = (path) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className={`min-h-screen flex transition-colors duration-300 ${
+      isDarkMode ? 'bg-slate-900' : 'bg-gray-50'
+    }`}>
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className={`fixed inset-0 z-40 lg:hidden transition-colors ${
+            isDarkMode ? 'bg-black bg-opacity-70' : 'bg-black bg-opacity-50'
+          }`}
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -64,27 +72,43 @@ const AdminLayout = ({ children }) => {
       <aside
         className={`${
           sidebarOpen ? 'w-64' : 'w-20'
-        } bg-white border-r border-gray-200 fixed lg:static inset-y-0 left-0 z-50 transition-all duration-300 ${
+        } fixed lg:static inset-y-0 left-0 z-50 transition-all duration-300 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        } ${
+          isDarkMode 
+            ? 'bg-slate-800/90 backdrop-blur-xl border-r border-slate-700/50' 
+            : 'bg-white border-r border-gray-200'
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Logo/Header */}
-          <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
+          <div className={`h-16 flex items-center justify-between px-4 border-b transition-colors ${
+            isDarkMode ? 'border-slate-700/50' : 'border-gray-200'
+          }`}>
             {sidebarOpen && (
-              <h1 className="text-xl font-bold text-gray-900">UPS Admin</h1>
+              <h1 className={`text-xl font-bold transition-colors ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>UPS Admin</h1>
             )}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:flex hidden p-2 rounded-lg hover:bg-gray-100 transition"
+              className={`lg:flex hidden p-2 rounded-lg transition ${
+                isDarkMode ? 'hover:bg-slate-700/50' : 'hover:bg-gray-100'
+              }`}
             >
-              <Menu className="w-5 h-5 text-gray-600" />
+              <Menu className={`w-5 h-5 transition-colors ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-600'
+              }`} />
             </button>
             <button
               onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition"
+              className={`lg:hidden p-2 rounded-lg transition ${
+                isDarkMode ? 'hover:bg-slate-700/50' : 'hover:bg-gray-100'
+              }`}
             >
-              <X className="w-5 h-5 text-gray-600" />
+              <X className={`w-5 h-5 transition-colors ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-600'
+              }`} />
             </button>
           </div>
 
@@ -101,11 +125,19 @@ const AdminLayout = ({ children }) => {
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
                         active
-                          ? 'bg-blue-50 text-blue-700 font-semibold'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          ? isDarkMode
+                            ? 'bg-indigo-600/20 text-indigo-400 font-semibold'
+                            : 'bg-blue-50 text-blue-700 font-semibold'
+                          : isDarkMode
+                            ? 'text-gray-300 hover:bg-slate-700/50'
+                            : 'text-gray-700 hover:bg-gray-100'
                       }`}
                     >
-                      <Icon className={`w-5 h-5 ${active ? 'text-blue-600' : 'text-gray-500'}`} />
+                      <Icon className={`w-5 h-5 ${
+                        active 
+                          ? isDarkMode ? 'text-indigo-400' : 'text-blue-600'
+                          : isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`} />
                       {sidebarOpen && (
                         <>
                           <span className="flex-1">{item.label}</span>
@@ -120,24 +152,51 @@ const AdminLayout = ({ children }) => {
           </nav>
 
           {/* User Section */}
-          <div className="border-t border-gray-200 p-4">
+          <div className={`border-t p-4 transition-colors ${
+            isDarkMode ? 'border-slate-700/50' : 'border-gray-200'
+          }`}>
             {sidebarOpen && user && (
-              <div className="mb-4 px-4 py-2 bg-gray-50 rounded-lg">
-                <p className="text-sm font-semibold text-gray-900">{user.username || user.email}</p>
-                <p className="text-xs text-gray-500">Administrator</p>
+              <div className={`mb-4 px-4 py-2 rounded-lg transition-colors ${
+                isDarkMode ? 'bg-slate-700/30' : 'bg-gray-50'
+              }`}>
+                <p className={`text-sm font-semibold transition-colors ${
+                  isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>{user.username || user.email}</p>
+                <p className={`text-xs transition-colors ${
+                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                }`}>Administrator</p>
               </div>
             )}
             <div className="space-y-1">
               <button
+                onClick={toggleTheme}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+                  isDarkMode
+                    ? 'text-yellow-400 hover:bg-slate-700/50'
+                    : 'text-slate-700 hover:bg-gray-100'
+                }`}
+              >
+                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                {sidebarOpen && <span>Toggle Theme</span>}
+              </button>
+              <button
                 onClick={() => setShowChangePassword(true)}
-                className="w-full flex items-center space-x-3 px-4 py-3 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+                  isDarkMode
+                    ? 'text-indigo-400 hover:bg-slate-700/50'
+                    : 'text-blue-600 hover:bg-blue-50'
+                }`}
               >
                 <Key className="w-5 h-5" />
                 {sidebarOpen && <span>Change Password</span>}
               </button>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition"
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+                  isDarkMode
+                    ? 'text-red-400 hover:bg-slate-700/50'
+                    : 'text-red-600 hover:bg-red-50'
+                }`}
               >
                 <LogOut className="w-5 h-5" />
                 {sidebarOpen && <span>Logout</span>}
@@ -150,26 +209,40 @@ const AdminLayout = ({ children }) => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col lg:ml-0">
         {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6">
+        <header className={`h-16 border-b flex items-center justify-between px-4 lg:px-6 transition-colors ${
+          isDarkMode 
+            ? 'bg-slate-800/90 backdrop-blur-xl border-slate-700/50' 
+            : 'bg-white border-gray-200'
+        }`}>
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition"
+            className={`lg:hidden p-2 rounded-lg transition ${
+              isDarkMode ? 'hover:bg-slate-700/50' : 'hover:bg-gray-100'
+            }`}
           >
-            <Menu className="w-6 h-6 text-gray-600" />
+            <Menu className={`w-6 h-6 transition-colors ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-600'
+            }`} />
           </button>
           <div className="flex-1" />
           {user && (
             <div className="flex items-center space-x-4">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-gray-900">{user.username || user.email}</p>
-                <p className="text-xs text-gray-500">Admin</p>
+                <p className={`text-sm font-semibold transition-colors ${
+                  isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>{user.username || user.email}</p>
+                <p className={`text-xs transition-colors ${
+                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                }`}>Admin</p>
               </div>
             </div>
           )}
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className={`flex-1 overflow-y-auto p-4 lg:p-6 transition-colors ${
+          isDarkMode ? 'bg-slate-900' : 'bg-gray-50'
+        }`}>{children}</main>
       </div>
 
       {/* Change Password Modal */}
