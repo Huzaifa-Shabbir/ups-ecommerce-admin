@@ -2,6 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global Dark Mode Styles */
+@layer base {
+  .dark {
+    color-scheme: dark;
+  }
+}
+
+@layer utilities {
+  /* Automatic dark mode for common card patterns */
+  .dark .bg-white {
+    @apply bg-slate-800/90 backdrop-blur-sm;
+  }
+  
+  .dark .bg-gray-50 {
+    @apply bg-slate-900;
+  }
+  
+  .dark .text-gray-900 {
+    @apply text-white;
+  }
+  
+  .dark .text-gray-700 {
+    @apply text-gray-200;
+  }
+  
+  .dark .text-gray-600 {
+    @apply text-gray-300;
+  }
+  
+  .dark .text-gray-500 {
+    @apply text-gray-400;
+  }
+  
+  .dark .border-gray-200 {
+    @apply border-slate-700/50;
+  }
+  
+  .dark .border-gray-100 {
+    @apply border-slate-700/50;
+  }
+  
+  .dark .bg-gray-100 {
+    @apply bg-slate-700/50;
+  }
+  
+  .dark .bg-gray-50 {
+    @apply bg-slate-800/50;
+  }
+  
+  .dark .hover\:bg-gray-100:hover {
+    @apply hover:bg-slate-700/50;
+  }
+  
+  .dark .hover\:bg-gray-50:hover {
+    @apply hover:bg-slate-800/50;
+  }
+  
+  .dark .bg-blue-50 {
+    @apply bg-indigo-900/20;
+  }
+  
+  .dark .text-blue-600 {
+    @apply text-indigo-400;
+  }
+  
+  .dark .text-blue-700 {
+    @apply text-indigo-300;
+  }
+  
+  .dark .bg-red-50 {
+    @apply bg-red-900/20;
+  }
+  
+  .dark .text-red-600 {
+    @apply text-red-400;
+  }
+  
+  .dark .text-red-700 {
+    @apply text-red-300;
+  }
+  
+  .dark .bg-green-50 {
+    @apply bg-green-900/20;
+  }
+  
+  .dark .text-green-600 {
+    @apply text-green-400;
+  }
+  
+  .dark .text-green-700 {
+    @apply text-green-300;
+  }
+  
+  .dark input,
+  .dark select,
+  .dark textarea {
+    @apply bg-slate-700/30 border-slate-600/50 text-white placeholder-gray-400;
+  }
+  
+  .dark input:focus,
+  .dark select:focus,
+  .dark textarea:focus {
+    @apply border-indigo-400/50;
+  }
+  
+  .dark table thead {
+    @apply bg-slate-800/50;
+  }
+  
+  .dark table tbody tr {
+    @apply border-slate-700/50;
+  }
+  
+  .dark table tbody tr:hover {
+    @apply bg-slate-800/50;
+  }
+}
+
 /* Custom animations for 3D effects */
 @keyframes float {
   0%, 100% {
