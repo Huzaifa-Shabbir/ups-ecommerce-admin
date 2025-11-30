@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { TechnicianAuthProvider } from './context/TechnicianAuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AdminLayout from './components/Layout/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import TechnicianProtectedRoute from './components/TechnicianProtectedRoute';
@@ -22,9 +23,10 @@ import TechnicianResourceCenter from './pages/Technician/ResourceCenter';
 
 function App() {
   return (
-    <AuthProvider>
-      <TechnicianAuthProvider>
-        <Router>
+    <ThemeProvider>
+      <AuthProvider>
+        <TechnicianAuthProvider>
+          <Router>
           <Routes>
             <Route path="/admin/login" element={<Login />} />
             <Route path="/technician/login" element={<Login />} />
@@ -177,6 +179,7 @@ function App() {
       </Router>
       </TechnicianAuthProvider>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 
