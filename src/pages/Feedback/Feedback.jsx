@@ -7,9 +7,9 @@ const Feedback = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  // Remove general search bar
-  const [searchOrderId, setSearchOrderId] = useState('');
-  const [searchCustomerId, setSearchCustomerId] = useState('');
+  // Single merged search input (mode selects order or customer)
+  const [searchMode, setSearchMode] = useState('order'); // 'order' or 'customer'
+  const [searchValue, setSearchValue] = useState('');
   const [ratingFilter, setRatingFilter] = useState('all');
   const [fetchFilter, setFetchFilter] = useState('all'); // all | customer | order
   const [filterValue, setFilterValue] = useState('');
@@ -66,35 +66,24 @@ const Feedback = () => {
   };
 
   // Search by order ID
-  const handleSearchByOrderId = async (e) => {
+  // Unified search handler: uses `searchMode` to decide endpoint
+  const handleSearch = async (e) => {
     e.preventDefault();
-    if (!searchOrderId.trim()) return;
+    const raw = (searchValue || '').toString().trim();
+    if (!raw) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await feedbackAPI.getByOrder(searchOrderId.trim());
+      let data;
+      if (searchMode === 'order') {
+        data = await feedbackAPI.getByOrder(raw);
+      } else {
+        data = await feedbackAPI.getByCustomer(raw);
+      }
       const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
       setFeedback(feedbackList);
     } catch (err) {
-      setError(err.message || 'Failed to fetch feedback by order ID');
-      setFeedback([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Search by customer ID
-  const handleSearchByCustomerId = async (e) => {
-    e.preventDefault();
-    if (!searchCustomerId.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await feedbackAPI.getByCustomer(searchCustomerId.trim());
-      const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
-      setFeedback(feedbackList);
-    } catch (err) {
-      setError(err.message || 'Failed to fetch feedback by customer ID');
+      setError(err.message || `Failed to fetch feedback by ${searchMode} ID`);
       setFeedback([]);
     } finally {
       setLoading(false);
@@ -184,53 +173,56 @@ const Feedback = () => {
       )}
 
       {/* Search by Order ID and Customer ID */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
-        <form className="flex-1 relative" onSubmit={async (e) => {
-          e.preventDefault();
-          if (!searchOrderId.trim() && !searchCustomerId.trim()) {
-            // Show all feedbacks
-            setLoading(true);
-            setError(null);
-            try {
-              const data = await feedbackAPI.getAll();
-              const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
-              setFeedback(feedbackList);
-            } catch (err) {
-              setError(err.message || 'Failed to fetch feedback');
-              setFeedback([]);
-            } finally {
-              setLoading(false);
-            }
-            return;
-          }
-          if (searchOrderId.trim()) {
-            await handleSearchByOrderId(e);
-          } else if (searchCustomerId.trim()) {
-            await handleSearchByCustomerId(e);
-          }
-        }}>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:space-x-4 space-y-3 md:space-y-0">
+        <form className="flex-1 relative" onSubmit={handleSearch}>
           <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-3 md:space-y-0">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by Order ID..."
-                value={searchOrderId}
-                onChange={(e) => setSearchOrderId(e.target.value)}
-                className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+            <div className="w-40">
+              <label className="sr-only">Search Mode</label>
+              <select
+                value={searchMode}
+                onChange={(e) => setSearchMode(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                aria-label="Search mode"
+              >
+                <option value="order">Order ID</option>
+                <option value="customer">Customer ID</option>
+              </select>
             </div>
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search by Customer ID..."
-                value={searchCustomerId}
-                onChange={(e) => setSearchCustomerId(e.target.value)}
+                placeholder={searchMode === 'order' ? 'Search by Order ID...' : 'Search by Customer ID...'}
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
                 className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Go</button>
+            <div className="flex items-center space-x-2">
+              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Go</button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setSearchValue('');
+                  setSearchMode('order');
+                  setError(null);
+                  setLoading(true);
+                  try {
+                    const data = await feedbackAPI.getAll();
+                    const feedbackList = Array.isArray(data) ? data : (data.feedback || []);
+                    setFeedback(feedbackList);
+                  } catch (err) {
+                    setError(err.message || 'Failed to fetch feedback');
+                    setFeedback([]);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="px-3 py-2 border border-gray-200 rounded text-gray-700"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </form>
       </div>
