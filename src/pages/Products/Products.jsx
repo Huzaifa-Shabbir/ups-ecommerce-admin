@@ -426,7 +426,7 @@ const Products = () => {
                   <span className="font-semibold text-lg text-gray-900">{product.name || 'Unnamed Product'}</span>
                   <span className="text-sm font-semibold text-blue-600">${parseFloat(product.price || 0).toFixed(2)}</span>
                 </div>
-                <p className="text-sm text-gray-500 mb-2">{product.description?.substring(0, 60) || 'No description'}</p>
+                <p className="text-sm text-gray-500 mb-2 flex-1">{product.description?.substring(0, 60) || 'No description'}</p>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-gray-700">Qty: {getQuantity(product) ?? 'N/A'}</span>
                   <span className="text-xs text-gray-700">{getCategoryName(product.category ?? product.category_id)}</span>
