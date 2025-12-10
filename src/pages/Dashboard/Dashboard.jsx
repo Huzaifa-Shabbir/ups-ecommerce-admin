@@ -108,17 +108,18 @@ const Dashboard = () => {
       revenueByMonth[month].revenue += parseFloat(order.total_amount || order.amount || 0) || 0;
       revenueByMonth[month].orders += 1;
     });
-    
-    // Sort months chronologically
-    const sortedMonths = Object.keys(revenueByMonth).sort((a, b) => {
-      const [aMonth, aYear] = a.split(' ');
-      const [bMonth, bYear] = b.split(' ');
-      const aDate = new Date(`${aMonth} 1, ${aYear}`);
-      const bDate = new Date(`${bMonth} 1, ${bYear}`);
-      return aDate - bDate;
-    });
-    
-    return sortedMonths.map(month => ({ name: month, ...revenueByMonth[month] }));
+
+    // Build a fixed last-6-month list (ensures previous and current month are present)
+    const monthsList = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      monthsList.push(key);
+      if (!revenueByMonth[key]) revenueByMonth[key] = { revenue: 0, orders: 0 };
+    }
+
+    return monthsList.map(month => ({ name: month, revenue: revenueByMonth[month].revenue || 0, orders: revenueByMonth[month].orders || 0 }));
   })();
 
   // Process recent orders to ensure proper date handling
@@ -156,6 +157,7 @@ const Dashboard = () => {
       icon: DollarSign,
       color: 'bg-yellow-500',
       link: '/admin/payments',
+      colClass: 'lg:col-span-2',
     },
   ];
 
@@ -195,16 +197,21 @@ const Dashboard = () => {
             <Link
               key={card.title}
               to={card.link}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition cursor-pointer group"
+              className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition cursor-pointer group ${card.colClass || ''}`}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">{card.title}</p>
                   <p className="text-3xl font-bold text-gray-900">{card.value}</p>
                 </div>
-                <div className={`${card.color} p-4 rounded-xl text-white group-hover:scale-110 transition`}>
-                  <Icon className="w-6 h-6" />
-                </div>
+                {/* Render icon only when present (remove DollarSign for revenue to avoid overflow) */}
+                {card.icon ? (
+                  <div className={`${card.color} p-3 rounded-xl text-white group-hover:scale-110 transition w-12 h-12 flex items-center justify-center flex-shrink-0`}>
+                    <Icon className="w-6 h-6" />
+                  </div>
+                ) : (
+                  <div className="w-12 h-12" />
+                )}
               </div>
               <div className="mt-4 flex items-center text-sm text-gray-500 group-hover:text-blue-600 transition">
                 <span>View details</span>
