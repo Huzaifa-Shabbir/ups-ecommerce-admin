@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTechnicianAuth } from '../../context/TechnicianAuthContext';
-import { resourcesAPI, serviceRequestsAPI } from '../../services/api';
+import { resourcesAPI, serviceRequestsAPI, servicesAPI, slotsAPI } from '../../services/api';
 import {
   Loader2,
   Wrench,
@@ -24,6 +24,8 @@ const TechnicianDashboard = () => {
   const { user } = useTechnicianAuth();
   const [requests, setRequests] = useState([]);
   const [resources, setResources] = useState([]);
+  const [servicesMap, setServicesMap] = useState({});
+  const [slotsMap, setSlotsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -37,15 +39,44 @@ const TechnicianDashboard = () => {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const [requestsData, resourcesData] = await Promise.all([
+      // Fetch requests, resources, services and slots so we can show friendly names/times
+      const [requestsData, resourcesData, servicesData, slotsData] = await Promise.all([
         serviceRequestsAPI.getByTechnician(user.id),
         resourcesAPI.getForTechnicians(),
+        servicesAPI.getAll(),
+        slotsAPI.getAll(),
       ]);
 
-      const requestList = Array.isArray(requestsData) ? requestsData : requestsData.requests || [];
+      const requestList = (() => {
+        if (!requestsData) return [];
+        if (Array.isArray(requestsData)) return requestsData;
+        if (Array.isArray(requestsData.requests)) return requestsData.requests;
+        if (Array.isArray(requestsData.requests?.data)) return requestsData.requests.data;
+        if (Array.isArray(requestsData.data)) return requestsData.data;
+        return [];
+      })();
+
       const resourceList = Array.isArray(resourcesData)
         ? resourcesData
         : resourcesData.resources || resourcesData.data || [];
+
+      // Build lookup maps for services and slots
+      const svcMap = {};
+      const svcList = Array.isArray(servicesData) ? servicesData : (servicesData.services || servicesData.data || []);
+      svcList.forEach((s) => {
+        const id = s.id || s.service_id;
+        if (id !== undefined && id !== null) svcMap[String(id)] = s;
+      });
+
+      const slMap = {};
+      const slList = Array.isArray(slotsData) ? slotsData : (slotsData.slots || slotsData.data || []);
+      slList.forEach((s) => {
+        const id = s.id || s.slot_id;
+        if (id !== undefined && id !== null) slMap[String(id)] = s;
+      });
+
+      setServicesMap(svcMap);
+      setSlotsMap(slMap);
 
       setRequests(requestList);
       setResources(resourceList.slice(0, 4));
@@ -57,17 +88,7 @@ const TechnicianDashboard = () => {
     }
   };
 
-  const stats = useMemo(() => {
-    const pending = requests.filter((req) => req.status === 'pending').length;
-    const assigned = requests.filter((req) => req.status === 'assigned').length;
-    const completed = requests.filter((req) => req.status === 'completed').length;
-    return {
-      total: requests.length,
-      pending,
-      assigned,
-      completed,
-    };
-  }, [requests]);
+  const stats = useMemo(() => ({ total: requests.length }), [requests]);
 
   const handleComplete = async (requestId) => {
     try {
@@ -123,19 +144,16 @@ const TechnicianDashboard = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Total jobs" value={stats.total} icon={Wrench} color="text-blue-600" />
-        <StatCard label="Pending review" value={stats.pending} icon={Clock4} color="text-amber-600" />
-        <StatCard label="In progress" value={stats.assigned} icon={ClipboardCheck} color="text-indigo-600" />
-        <StatCard label="Completed" value={stats.completed} icon={CheckCircle2} color="text-emerald-600" />
-      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard label="Total jobs" value={stats.total} icon={Wrench} color="text-blue-600" />
+          </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Active jobs</h2>
-              <p className="text-sm text-gray-500">Track assigned and pending tasks</p>
+              <p className="text-sm text-gray-500">Track assigned tasks</p> 
             </div>
             <span className="text-sm text-gray-500">{requests.length} total</span>
           </div>
@@ -154,7 +172,7 @@ const TechnicianDashboard = () => {
                       <StatusBadge status={request.status} />
                     </p>
                     <p className="text-sm text-gray-500 mt-1">
-                      Service #{request.service_id || 'N/A'} · Slot #{request.slot_id || 'N/A'}
+                      Service {servicesMap[String(request.service_id)] ? `: ${servicesMap[String(request.service_id)].service_name || servicesMap[String(request.service_id)].name}` : `#${request.service_id || 'N/A'}`} · Slot {slotsMap[String(request.slot_id)] ? `: ${slotsMap[String(request.slot_id)].slot_time || slotsMap[String(request.slot_id)].time || `#${request.slot_id}`}` : `#${request.slot_id || 'N/A'}`}
                     </p>
                     {request.description && (
                       <p className="text-sm text-gray-600 mt-2 line-clamp-2">{request.description}</p>
