@@ -16,10 +16,13 @@ import {
 } from 'lucide-react';
 
 const ACCESS_OPTIONS = [
+  { value: 'admin', label: 'Admin' },
   { value: 'customer', label: 'Customers' },
   { value: 'technician', label: 'Technicians' },
   { value: 'all', label: 'Customers & Technicians' },
 ];
+
+const getAccessLabel = (val) => ACCESS_OPTIONS.find(o => o.value === val)?.label || (val === 'all' ? 'Customers & Technicians' : val);
 
 const emptyForm = {
   title: '',
@@ -264,7 +267,7 @@ const Resources = () => {
                   </td>
                   <td className="py-4 px-6">
                     <span
-                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                      className={`inline-block px-2 py-1 text-xs font-semibold rounded-md leading-tight whitespace-normal max-w-[10rem] text-center ${
                         resource.access_level === 'technician'
                           ? 'bg-purple-50 text-purple-700'
                           : resource.access_level === 'customer'
@@ -272,7 +275,7 @@ const Resources = () => {
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
-                      {resource.access_level || 'all'}
+                      {getAccessLabel(resource.access_level || 'all')}
                     </span>
                   </td>
                   <td className="py-4 px-6">
