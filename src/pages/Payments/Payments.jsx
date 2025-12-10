@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { paymentsAPI } from '../../services/api';
+import { paymentsAPI, ordersAPI } from '../../services/api';
 import { CreditCard, Search, Filter, AlertCircle, CheckCircle, XCircle, Trash2, PlusCircle, X, RefreshCw } from 'lucide-react';
 
 const Payments = () => {
@@ -14,6 +14,7 @@ const Payments = () => {
   const [createData, setCreateData] = useState({ order_id: '', payment_method: '', amount: '' });
   const [createError, setCreateError] = useState(null);
   const [createLoading, setCreateLoading] = useState(false);
+  const [fetchingAmount, setFetchingAmount] = useState(false);
   const [searchedOrder, setSearchedOrder] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, payment: null });
 
@@ -236,6 +237,58 @@ const Payments = () => {
                 min="1"
                 value={createData.order_id}
                 onChange={(e) => setCreateData({ ...createData, order_id: e.target.value })}
+                onBlur={async () => {
+                  // When user leaves the order id field, attempt to fetch the order amount
+                  const id = createData.order_id?.toString().trim();
+                  if (!id) return;
+                  setCreateError(null);
+                  setFetchingAmount(true);
+                  try {
+                    const order = await ordersAPI.getById(id);
+                    // order may be nested; try common fields
+                    // Backend may return different shapes. Common possibilities:
+                    // 1) { total_amount: 12345 }
+                    // 2) { order: { total_amount: 12345, ... } }
+                    // 3) { items: [ { price, quantity }, ... ], order: { ... } }
+                    let possibleAmount = null;
+                    // direct fields
+                    possibleAmount = order?.total_amount ?? order?.total ?? order?.amount ?? order?.order_total ?? null;
+                    // nested order object
+                    if (possibleAmount == null) {
+                      possibleAmount = order?.order?.total_amount ?? order?.order?.total ?? order?.order?.amount ?? null;
+                    }
+                    // If still not found, try to compute from items (sum price * quantity)
+                    if (possibleAmount == null && Array.isArray(order?.items) && order.items.length) {
+                      const sum = order.items.reduce((s, it) => s + ((parseFloat(it.price) || 0) * (parseInt(it.quantity) || 0)), 0);
+                      possibleAmount = sum;
+                    }
+
+                    if (possibleAmount == null) {
+                      setCreateError('Could not determine order amount from order details');
+                      setCreateData(prev => ({ ...prev, amount: '' }));
+                    } else {
+                      // normalize to string with 2 decimals
+                      const amt = parseFloat(possibleAmount) || 0;
+                      // Some backends store amounts as integer cents (e.g., 100480). Detect likely cents by heuristic:
+                      // if amt is integer and unusually large (>= 1000) and items prices look small, assume cents and divide by 100
+                      let display = amt;
+                      if (Number.isInteger(amt) && amt > 1000) {
+                        // If items exist and item prices are small, use cents heuristic. Otherwise leave as-is.
+                        const avgItemPrice = Array.isArray(order?.items) && order.items.length ? (order.items.reduce((s, it) => s + (parseFloat(it.price) || 0), 0) / order.items.length) : null;
+                        if (avgItemPrice && avgItemPrice < 1000) {
+                          display = amt / 100; // convert cents to dollars
+                        }
+                      }
+                      setCreateData(prev => ({ ...prev, amount: display.toFixed(2).toString() }));
+                    }
+                  } catch (err) {
+                    console.error('Error fetching order for amount:', err);
+                    setCreateError(err.message || `Failed to fetch order #${createData.order_id}`);
+                    setCreateData(prev => ({ ...prev, amount: '' }));
+                  } finally {
+                    setFetchingAmount(false);
+                  }
+                }}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
               />
@@ -249,24 +302,26 @@ const Payments = () => {
                 required
               >
                 <option value="">Select Method</option>
-                <option value="credit_card">Credit Card</option>
-                <option value="debit_card">Debit Card</option>
-                <option value="paypal">PayPal</option>
-                <option value="bank_transfer">Bank Transfer</option>
+                <option value="card">Card</option>
                 <option value="cash">Cash</option>
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Amount</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={createData.amount}
-                onChange={(e) => setCreateData({ ...createData, amount: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={createData.amount}
+                  readOnly
+                  className={`w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 bg-gray-50 ${fetchingAmount ? 'opacity-70' : ''}`}
+                  placeholder="Order amount will be auto-filled"
+                />
+                {fetchingAmount && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
+              </div>
             </div>
             {createError && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 flex items-center space-x-2">
