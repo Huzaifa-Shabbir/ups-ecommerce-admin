@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { servicesAPI, slotsAPI, serviceRequestsAPI } from '../../services/api';
+import { techniciansAPI } from '../../services/api';
 import { Wrench, Plus, Edit, Trash2, Search, Save, X, AlertCircle, CheckCircle, ToggleLeft, ToggleRight, Calendar, Clock } from 'lucide-react';
 
 const Services = () => {
@@ -9,11 +10,14 @@ const Services = () => {
   const [serviceRequestsLoading, setServiceRequestsLoading] = useState(false);
   const [serviceRequestsError, setServiceRequestsError] = useState(null);
   const [serviceRequestsSuccess, setServiceRequestsSuccess] = useState(null);
-  const [serviceRequestsSearch, setServiceRequestsSearch] = useState('');
+  // removed redundant in-page search; server-side filter controls are used instead
   const [assignTechnicianModal, setAssignTechnicianModal] = useState(null); // { request, technicianId }
   const [assignTechnicianId, setAssignTechnicianId] = useState('');
-  const [serviceRequestsUserId, setServiceRequestsUserId] = useState('');
-  const [serviceRequestsTechnicianId, setServiceRequestsTechnicianId] = useState('');
+  const [technicians, setTechnicians] = useState([]);
+  const [techniciansLoading, setTechniciansLoading] = useState(false);
+  // unified filter: mode + value
+  const [serviceRequestsFilterMode, setServiceRequestsFilterMode] = useState('user'); // 'user' or 'technician'
+  const [serviceRequestsFilterValue, setServiceRequestsFilterValue] = useState('');
   const [services, setServices] = useState([]);
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,13 +47,61 @@ const Services = () => {
 
   const [slotFormData, setSlotFormData] = useState({
     slot_time: '',
-    service_id: '',
-    date: '',
-    is_available: true,
   });
+
+  // Helper to normalize different backend response shapes for service requests
+  const normalizeRequests = (data) => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.requests)) return data.requests;
+    if (Array.isArray(data.requests?.data)) return data.requests.data;
+    if (Array.isArray(data.data)) return data.data;
+    return [];
+  };
+
+  // Format duration: convert days to hours (e.g., '1 day' -> '24 hrs'),
+  // keep hours/minutes as-is, and append 'hrs' when numeric or hour-like.
+  const formatDuration = (duration) => {
+    if (!duration && duration !== 0) return 'N/A';
+    const d = String(duration).trim();
+    // numeric only -> hours
+    if (/^\d+$/.test(d)) return `${d} hrs`;
+    // contains 'day' -> convert days to hours
+    const dayMatch = d.match(/(\d+)\s*day/i);
+    if (dayMatch) {
+      const days = parseInt(dayMatch[1], 10) || 0;
+      return `${days * 24} hrs`;
+    }
+    // contains hour/hr -> normalize to 'hrs'
+    if (/hour|hr/i.test(d)) {
+      const numMatch = d.match(/(\d+(?:\.\d+)?)/);
+      return numMatch ? `${numMatch[1]} hrs` : d;
+    }
+    // minutes -> keep as-is
+    if (/min/i.test(d)) return d;
+    // fallback: append hrs
+    return `${d} hrs`;
+  };
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Load technicians list (active) to populate Assign Technician dropdown
+  useEffect(() => {
+    const loadTechnicians = async () => {
+      try {
+        setTechniciansLoading(true);
+        const data = await techniciansAPI.getActive();
+        const list = Array.isArray(data) ? data : (data.technicians || data.data || []);
+        setTechnicians(list);
+      } catch (err) {
+        // ignore silently; technicians dropdown will show empty
+      } finally {
+        setTechniciansLoading(false);
+      }
+    };
+    loadTechnicians();
   }, []);
 
   // Load service requests when tab is 'requests'
@@ -57,16 +109,17 @@ const Services = () => {
     if (activeTab === 'requests') {
       setServiceRequestsLoading(true);
       let fetchPromise;
-      if (serviceRequestsUserId) {
-        fetchPromise = serviceRequestsAPI.getByUser(serviceRequestsUserId);
-      } else if (serviceRequestsTechnicianId) {
-        fetchPromise = serviceRequestsAPI.getByTechnician(serviceRequestsTechnicianId);
+      const val = (serviceRequestsFilterValue || '').toString().trim();
+      if (serviceRequestsFilterMode === 'user' && val) {
+        fetchPromise = serviceRequestsAPI.getByUser(val);
+      } else if (serviceRequestsFilterMode === 'technician' && val) {
+        fetchPromise = serviceRequestsAPI.getByTechnician(val);
       } else {
         fetchPromise = serviceRequestsAPI.getAll();
       }
       fetchPromise
         .then((data) => {
-          setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+          setServiceRequests(normalizeRequests(data));
           setServiceRequestsError(null);
         })
         .catch((err) => {
@@ -74,15 +127,14 @@ const Services = () => {
         })
         .finally(() => setServiceRequestsLoading(false));
     }
-  }, [activeTab, serviceRequestsUserId, serviceRequestsTechnicianId]);
-  // UI handlers for user/technician filter
-  const handleServiceRequestsUserIdChange = (e) => {
-    setServiceRequestsUserId(e.target.value);
-    setServiceRequestsTechnicianId('');
+  }, [activeTab, serviceRequestsFilterMode, serviceRequestsFilterValue]);
+  // UI handlers for unified filter
+  const handleServiceRequestsFilterModeChange = (e) => {
+    setServiceRequestsFilterMode(e.target.value);
+    setServiceRequestsFilterValue('');
   };
-  const handleServiceRequestsTechnicianIdChange = (e) => {
-    setServiceRequestsTechnicianId(e.target.value);
-    setServiceRequestsUserId('');
+  const handleServiceRequestsFilterValueChange = (e) => {
+    setServiceRequestsFilterValue(e.target.value);
   };
   // Service Requests actions
   const handleAssignTechnician = async (requestId, technicianId) => {
@@ -92,10 +144,10 @@ const Services = () => {
       await serviceRequestsAPI.assignTechnician(requestId, technicianId);
       setServiceRequestsSuccess('Technician assigned successfully!');
       setAssignTechnicianModal(null);
-      setAssignTechnicianId('');
+  setAssignTechnicianId(''); // Resetting the technician ID after assignment
       // Reload requests
-      const data = await serviceRequestsAPI.getAll();
-      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+  const data = await serviceRequestsAPI.getAll();
+  setServiceRequests(normalizeRequests(data));
       setTimeout(() => setServiceRequestsSuccess(null), 3000);
     } catch (err) {
       setServiceRequestsError(err.message || 'Failed to assign technician');
@@ -108,8 +160,8 @@ const Services = () => {
       setServiceRequestsSuccess(null);
       await serviceRequestsAPI.decline(requestId);
       setServiceRequestsSuccess('Request declined successfully!');
-      const data = await serviceRequestsAPI.getAll();
-      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+  const data = await serviceRequestsAPI.getAll();
+  setServiceRequests(normalizeRequests(data));
       setTimeout(() => setServiceRequestsSuccess(null), 3000);
     } catch (err) {
       setServiceRequestsError(err.message || 'Failed to decline request');
@@ -122,8 +174,8 @@ const Services = () => {
       setServiceRequestsSuccess(null);
       await serviceRequestsAPI.complete(requestId);
       setServiceRequestsSuccess('Request marked as completed!');
-      const data = await serviceRequestsAPI.getAll();
-      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+  const data = await serviceRequestsAPI.getAll();
+  setServiceRequests(normalizeRequests(data));
       setTimeout(() => setServiceRequestsSuccess(null), 3000);
     } catch (err) {
       setServiceRequestsError(err.message || 'Failed to complete request');
@@ -136,8 +188,8 @@ const Services = () => {
       setServiceRequestsSuccess(null);
       await serviceRequestsAPI.delete(requestId);
       setServiceRequestsSuccess('Request deleted successfully!');
-      const data = await serviceRequestsAPI.getAll();
-      setServiceRequests(Array.isArray(data) ? data : (data.requests || []));
+  const data = await serviceRequestsAPI.getAll();
+  setServiceRequests(normalizeRequests(data));
       setTimeout(() => setServiceRequestsSuccess(null), 3000);
     } catch (err) {
       setServiceRequestsError(err.message || 'Failed to delete request');
@@ -270,8 +322,6 @@ const Services = () => {
 
       const slotData = {
         slot_time: slotFormData.slot_time,
-        service_id: slotFormData.service_id || null,
-        date: slotFormData.date || null,
         is_available: slotFormData.is_available !== false,
       };
 
@@ -283,9 +333,9 @@ const Services = () => {
         setSuccess('Slot created successfully!');
       }
 
-      setShowSlotModal(false);
-      setEditingSlot(null);
-      setSlotFormData({ slot_time: '', service_id: '', date: '', is_available: true });
+  setShowSlotModal(false);
+  setEditingSlot(null);
+  setSlotFormData({ slot_time: '' });
       loadData();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -297,9 +347,6 @@ const Services = () => {
     setEditingSlot(slot);
     setSlotFormData({
       slot_time: slot.slot_time || '',
-      service_id: slot.service_id || '',
-      date: slot.date || '',
-      is_available: slot.is_available !== false,
     });
     setShowSlotModal(true);
   };
@@ -316,22 +363,7 @@ const Services = () => {
     }
   };
 
-  const toggleSlotAvailability = async (slot) => {
-    try {
-      setError(null);
-      setSuccess(null);
-      const newAvailability = !(slot.is_available !== false);
-      await slotsAPI.update(slot.id || slot.slot_id, {
-        ...slot,
-        is_available: newAvailability,
-      });
-      setSuccess(`Slot ${newAvailability ? 'enabled' : 'disabled'} successfully!`);
-      loadData();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError(err.message || 'Failed to toggle slot availability');
-    }
-  };
+  // Slot availability removed from UX (slots are always available by default)
 
   // Filter data based on search term
 
@@ -349,18 +381,8 @@ const Services = () => {
     slot.slot_id?.toString().includes(searchTerm)
   );
 
-  const filteredServiceRequests = serviceRequests.filter((req) => {
-    const term = serviceRequestsSearch.toLowerCase();
-    return (
-      req.id?.toString().includes(term) ||
-      req.status?.toLowerCase().includes(term) ||
-      req.customer_name?.toLowerCase().includes(term) ||
-      req.technician_name?.toLowerCase().includes(term) ||
-      req.service_name?.toLowerCase().includes(term) ||
-      req.address?.toLowerCase().includes(term) ||
-      req.created_at?.toString().includes(term)
-    );
-  });
+  // Show service requests as-is (server-side filters are used via the filter controls)
+  const filteredServiceRequests = Array.isArray(serviceRequests) ? serviceRequests : [];
 
   if (loading) {
     return (
@@ -373,28 +395,30 @@ const Services = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Manage Services & Slots</h1>
           <p className="text-gray-600 mt-1">View and manage services and their available time slots</p>
         </div>
-        <button
-          onClick={() => {
-            if (activeTab === 'services') {
-              setEditingService(null);
-              setServiceFormData({ service_name: '', name: '', description: '', price: '', duration: '', availability: true, is_available: true });
-              setShowServiceModal(true);
-            } else {
-              setEditingSlot(null);
-              setSlotFormData({ slot_time: '', service_id: '', date: '', is_available: true });
-              setShowSlotModal(true);
-            }
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add {activeTab === 'services' ? 'Service' : 'Slot'}</span>
-        </button>
+        {activeTab !== 'requests' && (
+          <button
+            onClick={() => {
+              if (activeTab === 'services') {
+                setEditingService(null);
+                setServiceFormData({ service_name: '', name: '', description: '', price: '', duration: '', availability: true, is_available: true });
+                setShowServiceModal(true);
+              } else {
+                setEditingSlot(null);
+                setSlotFormData({ slot_time: '' });
+                setShowSlotModal(true);
+              }
+            }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add {activeTab === 'services' ? 'Service' : 'Slot'}</span>
+          </button>
+        )}
       </div>
 
       {/* Error/Success Messages */}
@@ -458,7 +482,7 @@ const Services = () => {
 
 
       {/* Search Bar */}
-      {activeTab !== 'requests' ? (
+      {activeTab !== 'requests' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -471,39 +495,38 @@ const Services = () => {
             />
           </div>
         </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search service requests..."
-              value={serviceRequestsSearch}
-              onChange={(e) => setServiceRequestsSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
       )}
       {/* Service Requests Table */}
       {activeTab === 'requests' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Filter by user or technician */}
+          {/* Filter by user or technician (merged) */}
           <div className="flex items-center space-x-4 p-4">
+            <select
+              value={serviceRequestsFilterMode}
+              onChange={handleServiceRequestsFilterModeChange}
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              aria-label="Filter mode"
+            >
+              <option value="user">Customer / User</option>
+              <option value="technician">Technician</option>
+            </select>
             <input
               type="text"
-              placeholder="Filter by Customer/User ID"
-              value={serviceRequestsUserId}
-              onChange={handleServiceRequestsUserIdChange}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder={serviceRequestsFilterMode === 'user' ? 'Filter by Customer/User ID' : 'Filter by Technician ID'}
+              value={serviceRequestsFilterValue}
+              onChange={handleServiceRequestsFilterValueChange}
+              className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <input
-              type="text"
-              placeholder="Filter by Technician ID"
-              value={serviceRequestsTechnicianId}
-              onChange={handleServiceRequestsTechnicianIdChange}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <button
+              type="button"
+              onClick={() => {
+                setServiceRequestsFilterValue('');
+                setServiceRequestsFilterMode('user');
+              }}
+              className="px-3 py-2 border border-gray-200 rounded text-gray-700"
+            >
+              Reset
+            </button>
           </div>
           {serviceRequestsError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
@@ -553,7 +576,7 @@ const Services = () => {
                     <td className="py-4 px-6">
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${
                         req.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        req.status === 'assigned' ? 'bg-blue-100 text-blue-800' :
+                        (req.status === 'assigned' || req.status === 'confirmed') ? 'bg-green-100 text-green-800' :
                         req.status === 'declined' ? 'bg-red-100 text-red-800' :
                         req.status === 'completed' ? 'bg-green-100 text-green-800' :
                         'bg-gray-100 text-gray-800'
@@ -620,13 +643,26 @@ const Services = () => {
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Assign Technician</h3>
             <p className="text-gray-600 mb-6">Assign a technician to this service request.</p>
-            <input
-              type="text"
-              placeholder="Technician ID"
-              value={assignTechnicianId}
-              onChange={e => setAssignTechnicianId(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
-            />
+            {techniciansLoading ? (
+              <div className="w-full flex items-center justify-center py-6">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : (
+              <select
+                value={assignTechnicianId}
+                onChange={e => setAssignTechnicianId(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+              >
+                <option value="">Select a technician</option>
+                {technicians.map((t, idx) => {
+                  const id = t.user_Id || t.user_id || t.id || t.technician_id;
+                  const label = t.name || t.full_name || t.username || t.email || id || `Technician ${idx + 1}`;
+                  return (
+                    <option key={id || idx} value={id || ''}>{label}{id ? ` (#${id})` : ''}</option>
+                  );
+                })}
+              </select>
+            )}
             <div className="flex items-center justify-end space-x-3">
               <button
                 onClick={() => setAssignTechnicianModal(null)}
@@ -635,7 +671,7 @@ const Services = () => {
                 Cancel
               </button>
               <button
-                onClick={() => handleAssignTechnician(assignTechnicianModal.id, assignTechnicianId)}
+                onClick={() => handleAssignTechnician(assignTechnicianModal.request_id || assignTechnicianModal.id || assignTechnicianModal.requestId, assignTechnicianId)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                 disabled={!assignTechnicianId}
               >
@@ -681,7 +717,7 @@ const Services = () => {
                       <td className="py-4 px-6 text-gray-900 font-semibold">
                         ${parseFloat(service.price || 0).toFixed(2)}
                       </td>
-                      <td className="py-4 px-6 text-gray-600">{service.duration || 'N/A'}</td>
+                      <td className="py-4 px-6 text-gray-600">{formatDuration(service.duration)}</td>
                       <td className="py-4 px-6">
                         <button
                           onClick={() => toggleServiceAvailability(service)}
@@ -741,15 +777,11 @@ const Services = () => {
                 <tr>
                   <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Slot ID</th>
                   <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Time Slot</th>
-                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Service ID</th>
-                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Date</th>
-                  <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Availability</th>
                   <th className="text-right py-3 px-6 text-sm font-semibold text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSlots.map((slot) => {
-                  const isAvailable = slot.is_available !== false;
                   return (
                     <tr key={slot.id || slot.slot_id} className="border-b border-gray-100 hover:bg-gray-50 transition">
                       <td className="py-4 px-6 text-gray-600">#{slot.id || slot.slot_id}</td>
@@ -761,30 +793,8 @@ const Services = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 px-6 text-gray-600">
-                        {slot.service_id ? `#${slot.service_id}` : 'All Services'}
-                      </td>
-                      <td className="py-4 px-6 text-gray-600">
-                        {slot.date ? new Date(slot.date).toLocaleDateString() : 'Any Date'}
-                      </td>
-                      <td className="py-4 px-6">
-                        <button
-                          onClick={() => toggleSlotAvailability(slot)}
-                          className="flex items-center space-x-2"
-                        >
-                          {isAvailable ? (
-                            <>
-                              <ToggleRight className="w-6 h-6 text-green-600" />
-                              <span className="text-green-800 font-semibold">Available</span>
-                            </>
-                          ) : (
-                            <>
-                              <ToggleLeft className="w-6 h-6 text-gray-400" />
-                              <span className="text-gray-600">Unavailable</span>
-                            </>
-                          )}
-                        </button>
-                      </td>
+                      
+                      {/* Availability removed from slots */}
                       <td className="py-4 px-6">
                         <div className="flex items-center justify-end space-x-2">
                           <button
@@ -934,7 +944,7 @@ const Services = () => {
                 onClick={() => {
                   setShowSlotModal(false);
                   setEditingSlot(null);
-                  setSlotFormData({ slot_time: '', service_id: '', date: '', is_available: true });
+                  setSlotFormData({ slot_time: '' });
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -954,51 +964,15 @@ const Services = () => {
                   placeholder="e.g., 9am-10am, 2pm-3pm"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Service ID</label>
-                  <select
-                    name="service_id"
-                    value={slotFormData.service_id}
-                    onChange={handleSlotInputChange}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">All Services</option>
-                    {services.map(service => (
-                      <option key={service.id || service.service_id} value={service.id || service.service_id}>
-                        {service.service_name || service.name} (#{service.id || service.service_id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    name="date"
-                    value={slotFormData.date}
-                    onChange={handleSlotInputChange}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  name="is_available"
-                  checked={slotFormData.is_available}
-                  onChange={handleSlotInputChange}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label className="text-sm font-semibold text-gray-700">Available</label>
-              </div>
+              {/* Service ID and Date fields removed per UX request */}
+              {/* Slot availability control removed per UX request */}
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => {
                     setShowSlotModal(false);
                     setEditingSlot(null);
-                    setSlotFormData({ slot_time: '', service_id: '', date: '', is_available: true });
+                    setSlotFormData({ slot_time: '' });
                   }}
                   className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
                 >
