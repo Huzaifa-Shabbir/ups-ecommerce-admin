@@ -32,7 +32,8 @@ const OrdersSummary = ({ className = '', compact = false }) => {
   const fullCards = [
     { title: 'Today Sales', value: summary?.today_sales ?? 0, icon: Calendar, color: 'bg-indigo-500' },
     { title: 'Total Orders', value: summary?.total_orders ?? 0, icon: ShoppingCart, color: 'bg-purple-500' },
-    { title: 'Total Revenue', value: `$${(summary?.total_revenue ?? 0).toLocaleString()}`, icon: DollarSign, color: 'bg-amber-500' },
+    // Keep icon for Total Revenue and allow it to take extra width (span 2 columns)
+    { title: 'Total Revenue', value: `$${(summary?.total_revenue ?? 0).toLocaleString()}`, icon: DollarSign, color: 'bg-amber-500', colClass: 'md:col-span-2' },
     { title: 'Pending Orders', value: summary?.pending_orders ?? 0, icon: Clock, color: 'bg-yellow-500' },
   ];
 
@@ -66,15 +67,20 @@ const OrdersSummary = ({ className = '', compact = false }) => {
       {cards.map((c) => {
         const Icon = c.icon;
         return (
-          <Link key={c.title} to="/admin/reports" className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition">
+          <Link key={c.title} to="/admin/reports" className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition ${c.colClass || ''}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">{c.title}</p>
                 <p className="text-2xl font-bold text-gray-900">{c.value}</p>
               </div>
-              <div className={`${c.color} p-3 rounded-xl text-white`}>
-                <Icon className="w-5 h-5" />
-              </div>
+              {/* Icon container: render only if Icon exists; otherwise preserve spacing */}
+              {Icon ? (
+                <div className={`${c.color} p-3 rounded-xl text-white w-12 h-12 flex items-center justify-center flex-shrink-0`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              ) : (
+                <div className="w-12 h-12" />
+              )}
             </div>
           </Link>
         );
